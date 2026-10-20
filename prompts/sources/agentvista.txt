@@ -1,0 +1,3 @@
+## Source notes: agentvista
+
+Extract visual sub-goals from narrative questions. Read required landmarks, parts and measurements through actual views. Searches, geometry and unit conversion are plans only. Never claim enhancement restored missing pixels.

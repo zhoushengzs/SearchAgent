@@ -1,0 +1,14 @@
+.venv/
+.hf_cache/
+__pycache__/
+*.pyc
+data/
+.env
+.env.local
+.DS_Store
+.env copy
+.venv-eval/
+outputs/
+/OpenSearch-VL-SFT-Agent-NoImages/
+*.bak_*
+/.codex/

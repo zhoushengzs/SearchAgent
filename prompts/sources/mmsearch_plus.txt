@@ -1,0 +1,3 @@
+## Source notes: mmsearch_plus
+
+Small peripheral text may identify events or editions. Locate it in the coarse view before requesting a crop. Combine cues only when their relationship is supported by a context view. Paper pages may require titles, author blocks or footers. Unreadable markings stay uncertain.
