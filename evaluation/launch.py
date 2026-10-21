@@ -95,10 +95,10 @@ def main():
     p.add_argument('--tasks', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--gpus', default=os.environ.get('CUDA_VISIBLE_DEVICES') or '0,1,2,3,4,5,6,7')
-    p.add_argument('--expected-count', type=int, default=3103)
+    p.add_argument('--expected-count', type=int, help='Optional extra count check; portable bundles declare their full count')
     p.add_argument('--mode', choices=['agent', 'direct'], default='agent')
     p.add_argument('--dtype', choices=['bfloat16', 'float16', 'float32'], default='bfloat16')
-    p.add_argument('--max-steps', type=int, default=30)
+    p.add_argument('--max-steps', type=int, default=10)
     p.add_argument('--max-new-tokens', type=int, default=4096)
     p.add_argument('--context-tokens', type=int, default=32768)
     p.add_argument('--max-pixels', type=int, default=262144)
@@ -111,11 +111,14 @@ def main():
     p.add_argument('--allow-download', action='store_true')
     p.add_argument('--dry-run', action='store_true', help='Print assignments and commands without loading models')
     a = p.parse_args()
-    if a.expected_count < 1 or (a.limit is not None and a.limit < 1) or a.max_steps < 1 or a.max_new_tokens < 1 or a.context_tokens <= a.max_new_tokens or not 64 <= a.image_side <= 2048 or a.max_pixels < 1:
+    if (a.expected_count is not None and a.expected_count < 1) or (a.limit is not None and a.limit < 1) or a.max_steps < 1 or a.max_new_tokens < 1 or a.context_tokens <= a.max_new_tokens or not 64 <= a.image_side <= 2048 or a.max_pixels < 1:
         p.error('Invalid task count or model budget')
     try:
+        tasks = load_tasks(a.tasks, a.expected_count)
+        a.expected_count = len(tasks)
+        if a.limit is not None:
+            tasks = tasks[:a.limit]
         commands = worker_commands(a)
-        tasks = load_tasks(a.tasks, a.expected_count, a.limit)
         if a.dry_run:
             for index, (device, command) in enumerate(commands):
                 print(f'GPU {device}: {len(tasks[index::len(commands)])} tasks')

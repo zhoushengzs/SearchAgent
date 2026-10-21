@@ -12,7 +12,7 @@ from unittest.mock import patch
 from core.provenance import file_sha
 from evaluation.common import load_tasks, materialize_task_paths, read_predictions, shard_tasks, task_fingerprint
 from evaluation.merge import merge_shards
-from evaluation.package import export_bundle
+from evaluation.package import export_bundle, select_benchmark_sample
 from evaluation.prepare import dump, write_rows
 from evaluation.run import fingerprint, run_task, tool_definitions
 
@@ -26,6 +26,56 @@ def task(index, images=None):
 
 
 class PortableInputTests(unittest.TestCase):
+    def test_fixed_sample_preserves_other_benchmarks_and_ignores_input_order(self):
+        values = [task(index) for index in range(2621)]
+        for value in values:
+            value['source_dataset'] = 'm3vqa'
+        others = [task(index) for index in range(2621, 3103)]
+        selected, metadata = select_benchmark_sample(values + others, 'm3vqa', 500, 42)
+        reversed_sample, _ = select_benchmark_sample(list(reversed(values + others)), 'm3vqa', 500, 42)
+        changed_seed, _ = select_benchmark_sample(values + others, 'm3vqa', 500, 43)
+        ids = {t['id'] for t in selected}
+        self.assertEqual(len(selected), 982)
+        self.assertEqual(sum(t['source_dataset'] == 'm3vqa' for t in selected), 500)
+        self.assertTrue({t['id'] for t in others} <= ids)
+        self.assertEqual(ids, {t['id'] for t in reversed_sample})
+        self.assertNotEqual(ids, {t['id'] for t in changed_seed})
+        self.assertEqual(metadata['source_population'], 2621)
+        self.assertEqual(metadata['parent_task_count'], 3103)
+        for source, count in [('missing', 1), ('m3vqa', 2622), ('m3vqa', 0), (None, 1), ('m3vqa', None)]:
+            with self.assertRaises(ValueError):
+                select_benchmark_sample(values, source, count)
+
+    def test_sample_bundle_count_integrity_and_launcher_budget(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            values = [task(index) for index in range(8)]
+            values[-1]['source_dataset'] = 'other'
+            write_rows(root / 'tasks.jsonl', values)
+            write_rows(root / 'refs.jsonl', [dict(id=t['id'], input_fingerprint=t['input_fingerprint'], answer='detached') for t in values])
+            bundle = root / 'bundle'
+            manifest = export_bundle(root / 'tasks.jsonl', root / 'refs.jsonl', bundle, 8,
+                                     sample_source='fixture', sample_count=3)
+            self.assertEqual(manifest['task_count'], 4)
+            self.assertEqual(len(load_tasks(bundle / 'tasks.jsonl')), 4)
+            self.assertEqual(len((bundle / 'references.jsonl').read_text().splitlines()), 4)
+            self.assertNotIn('detached', (bundle / 'tasks.jsonl').read_text())
+            command = [sys.executable, '-m', 'evaluation.launch', '--model', 'fixture',
+                       '--tasks', str(bundle / 'tasks.jsonl'), '--output', str(root / 'results'),
+                       '--gpus', '0,1', '--limit', '2', '--dry-run']
+            result = subprocess.run(command, capture_output=True, text=True, check=True)
+            self.assertIn('GPU 0: 1 tasks', result.stdout)
+            self.assertIn('GPU 1: 1 tasks', result.stdout)
+            self.assertEqual(result.stdout.count('--expected-count 4'), 2)
+            self.assertEqual(result.stdout.count('--max-steps 10'), 2)
+            self.assertFalse((root / 'results').exists())
+            with self.assertRaises(ValueError):
+                load_tasks(bundle / 'tasks.jsonl', 8)
+            with (bundle / 'tasks.jsonl').open('a') as stream:
+                stream.write('\n')
+            with self.assertRaisesRegex(ValueError, 'frozen bundle'):
+                load_tasks(bundle / 'tasks.jsonl')
+
     def test_bundle_is_self_contained_after_move_and_reference_is_detached(self):
         from PIL import Image
         with tempfile.TemporaryDirectory() as folder:
@@ -92,6 +142,98 @@ class PortableInputTests(unittest.TestCase):
         self.assertEqual([len(part) for part in parts], [388] * 7 + [387])
         self.assertEqual({t['id'] for part in parts for t in part}, {t['id'] for t in values})
         self.assertEqual(sum(map(len, parts)), 3103)
+
+
+class EvaluationRecoveryTests(unittest.TestCase):
+    def test_page_denial_is_recoverable_but_service_and_network_errors_are_not(self):
+        from evaluation.run import tool_infrastructure_failure
+        for code in (403, 404, 410):
+            result = {'status': 'error', 'error_type': 'HTTPError', 'http_status': code}
+            self.assertFalse(tool_infrastructure_failure('visit', {}, result))
+            self.assertFalse(tool_infrastructure_failure('inspect_image', {'image_url': 'https://example.com/a.png'}, result))
+            self.assertTrue(tool_infrastructure_failure('web_search', {}, result))
+        for kind in ('ReadTimeout', 'ConnectionError', 'ProxyError'):
+            self.assertTrue(tool_infrastructure_failure('visit', {}, {'status': 'error', 'error_type': kind}))
+        for code in (401, 429, 500, 503):
+            self.assertTrue(tool_infrastructure_failure('visit', {}, {'status': 'error', 'error_type': 'HTTPError', 'http_status': code}))
+
+    def test_answer_after_denied_page_is_complete_and_error_is_retained(self):
+        class Model:
+            calls = 0
+            def generate(self, messages, *args):
+                self.calls += 1
+                if self.calls == 1:
+                    text = '<tool_call>{"name":"vs_visit","arguments":{"url":"https://example.com"}}</tool_call>'
+                else:
+                    result = json.loads(messages[-1]['content'])
+                    assert result['result']['http_status'] == 403
+                    assert 'another' in result['result']['hint']
+                    text = '<response>answer from other evidence</response>'
+                return {'text': text, 'status': 'ok'}
+        with tempfile.TemporaryDirectory() as folder:
+            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=2,
+                                   max_pixels=262144, max_new_tokens=64, context_tokens=1024)
+            with patch('agent.tools.EvidenceTools.execute', return_value={'status': 'error', 'error_type': 'HTTPError', 'http_status': 403}):
+                record = run_task(task(0), Model(), args, tool_definitions(), 'fixture')
+            self.assertEqual(record['status'], 'answered')
+            self.assertFalse(record['infrastructure_error'])
+            self.assertEqual(record['tool_errors'], 1)
+
+    def test_pixel_crop_is_rejected_with_repair_guidance_and_last_decision_notice(self):
+        class Model:
+            calls = 0
+            def generate(self, messages, *args):
+                self.calls += 1
+                if self.calls == 1:
+                    text = '<tool_call>{"name":"vs_crop","arguments":{"asset_id":"image_1","bbox":[0,637,1145,749]}}</tool_call>'
+                else:
+                    feedback = json.loads(messages[-1]['content'])
+                    assert feedback['result']['error_type'] == 'InvalidArguments'
+                    assert '[0,1]' in feedback['result']['detail']
+                    assert feedback['remaining_decisions'] == 1
+                    assert 'final response' in feedback['budget_notice']
+                    text = '<response>uncertain</response>'
+                return {'text': text, 'status': 'ok'}
+        with tempfile.TemporaryDirectory() as folder:
+            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=2,
+                                   max_pixels=262144, max_new_tokens=64, context_tokens=1024)
+            with patch('agent.tools.EvidenceTools.execute') as execute:
+                record = run_task(task(0), Model(), args, tool_definitions(), 'fixture')
+                execute.assert_not_called()
+            self.assertEqual(record['status'], 'answered')
+            self.assertFalse(record['infrastructure_error'])
+            self.assertEqual(record['tool_errors'], 1)
+
+    def test_pixel_crop_feedback_includes_concrete_normalized_bbox(self):
+        from PIL import Image
+        from evaluation.run import add_tool_error_feedback
+        with tempfile.TemporaryDirectory() as folder:
+            image = Path(folder) / 'image.png'
+            Image.new('RGB', (1000, 500), 'red').save(image)
+            tools = SimpleNamespace(assets={'image_1': {'source_path': str(image)}})
+            result = {'status': 'error', 'error_type': 'InvalidArguments', 'detail': 'Crop needs a valid bbox'}
+            add_tool_error_feedback('crop', {'asset_id': 'image_1', 'bbox': [0, 250, 1000, 500]}, result, tools, [])
+            self.assertIn('1000x500', result['detail'])
+            self.assertIn('[0.000, 0.500, 1.000, 1.000]', result['detail'])
+
+    def test_repeated_invalid_crop_reports_repetition(self):
+        from evaluation.run import add_tool_error_feedback
+        arguments = {'asset_id': 'image_1', 'bbox': [0, 630, 1145, 749]}
+        prior = {'tool_call': {'name': 'vs_crop', 'arguments': arguments},
+                 'result': {'status': 'error', 'error_type': 'InvalidArguments'}}
+        result = {'status': 'error', 'error_type': 'InvalidArguments', 'detail': 'bad'}
+        add_tool_error_feedback('crop', arguments, result, SimpleNamespace(assets={}), [prior])
+        self.assertIn('already failed 1 time', result['detail'])
+
+    def test_calculate_and_pdf_visit_errors_carry_specific_hints(self):
+        from evaluation.run import add_tool_error_feedback
+        calc = {'status': 'error', 'error_type': 'ValueError'}
+        add_tool_error_feedback('calculate', {'expression': 'sin(1)'}, calc, SimpleNamespace(assets={}), [])
+        self.assertIn('numeric arithmetic', calc['hint'])
+        visit = {'status': 'error', 'error_type': 'ValueError'}
+        add_tool_error_feedback('visit', {'url': 'https://example.com/manual.PDF?x=1'}, visit,
+                                SimpleNamespace(assets={}), [])
+        self.assertIn('PDF', visit['hint'])
 
 
 class MergeTests(unittest.TestCase):

@@ -33,8 +33,21 @@ def task_fingerprint(task):
 
 
 def load_tasks(path, expected_count=None, limit=None):
+    path = Path(path)
+    manifest_path = path.resolve().parent / 'manifest.json'
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        if manifest.get('schema') == 'portable-frozen-evaluation-v1':
+            if file_sha(path) != manifest['tasks_sha256']:
+                raise ValueError('Task file differs from the frozen bundle manifest')
+            count = manifest['task_count']
+            if type(count) is not int or count < 1:
+                raise ValueError('Invalid task count in bundle manifest')
+            if expected_count is not None and expected_count != count:
+                raise ValueError(f'Expected {expected_count} tasks, but bundle manifest declares {count}')
+            expected_count = count
     tasks = []
-    with Path(path).open(encoding='utf-8') as stream:
+    with path.open(encoding='utf-8') as stream:
         for line in stream:
             if line.strip():
                 tasks.append(json.loads(line))

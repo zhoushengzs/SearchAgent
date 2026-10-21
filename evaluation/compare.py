@@ -12,6 +12,22 @@ from evaluation.prepare import dump, rows
 from evaluation.run import fingerprint
 
 
+def cross_backend_differences(base, sft):
+    """Permit documented deployment differences, never different tasks or budgets."""
+    protocols = [base['protocol'], sft['protocol']]
+    if sum(p.get('device') == 'openrouter' for p in protocols) != 1:
+        raise ValueError('Cross-backend comparison requires exactly one OpenRouter run')
+    for run in (base, sft):
+        if fingerprint(run['protocol']) != run['protocol_sha256']:
+            raise ValueError('Protocol metadata was changed after inference')
+    deployment_fields = {'version', 'device', 'dtype', 'versions', 'api'}
+    shared = [{k: v for k, v in p.items() if k not in deployment_fields} for p in protocols]
+    if shared[0] != shared[1]:
+        raise ValueError('Tasks, prompts, tools, budgets or shared evaluation code differ')
+    return {k: {'base': protocols[0].get(k), 'sft': protocols[1].get(k)}
+            for k in sorted(deployment_fields) if protocols[0].get(k) != protocols[1].get(k)}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--base-scores', required=True, type=Path)
@@ -19,13 +35,21 @@ def main():
     p.add_argument('--base-run', required=True, type=Path)
     p.add_argument('--sft-run', required=True, type=Path)
     p.add_argument('--output', required=True, type=Path)
+    p.add_argument('--allow-cross-backend', action='store_true',
+                   help='Explicitly label OpenRouter/local deployment differences; still require identical tasks and budgets')
     a = p.parse_args()
     base_config = json.loads((a.base_scores / 'score_config.json').read_text())
     sft_config = json.loads((a.sft_scores / 'score_config.json').read_text())
     base_run = json.loads((a.base_run / 'run.json').read_text())
     sft_run = json.loads((a.sft_run / 'run.json').read_text())
+    deployment_differences = {}
     if base_run['protocol_sha256'] != sft_run['protocol_sha256']:
-        p.error('Models used different tasks, prompts, tools, budgets, versions or evaluation code')
+        if not a.allow_cross_backend:
+            p.error('Models used different protocols. OpenRouter/local comparisons require --allow-cross-backend.')
+        try:
+            deployment_differences = cross_backend_differences(base_run, sft_run)
+        except ValueError as exc:
+            p.error(str(exc))
     if base_config['policy_id'] != sft_config['policy_id']:
         p.error('Judge policies differ')
     for config, run in [(base_config, base_run), (sft_config, sft_run)]:
@@ -72,12 +96,17 @@ def main():
     report = {'metric': base_config['policy']['metric'], 'datasets': table,
               'macro_base_pct': macro_base, 'macro_sft_pct': macro_sft,
               'macro_delta_percentage_points': macro_sft - macro_base,
-              'base_model': base_run['model'], 'sft_model': sft_run['model']}
+              'base_model': base_run['model'], 'sft_model': sft_run['model'],
+              'comparison_type': 'cross_backend' if deployment_differences else 'same_protocol',
+              'deployment_differences': deployment_differences}
     dump(a.output / 'comparison.json', report)
     text = ['# 本地留出集对比', '',
             '以下为项目统一参考答案裁判正确率，不是各 benchmark 的官方完整榜单分数。', '',
             '| Benchmark | 题数 | 原始模型 | SFT 模型 | 差值（百分点） |',
             '|---|---:|---:|---:|---:|']
+    if deployment_differences:
+        text[0] = '# OpenRouter / 本地 SFT 留出集对比'
+        text.insert(2, '这是不同部署后端的比较：服务端聊天模板、图片处理、精度和 token 计数可能不同，不能把分差完全归因于 SFT。具体差异见 comparison.json。\n')
     for row in table:
         text.append(f'| {row["benchmark"]} | {row["n"]} | {row["base_score_pct"]:.2f}% | {row["sft_score_pct"]:.2f}% | {row["delta_percentage_points"]:+.2f} |')
     text.extend(['', f'各数据集等权平均：原始模型 {macro_base:.2f}%，SFT {macro_sft:.2f}%，差值 {macro_sft-macro_base:+.2f} 个百分点。',

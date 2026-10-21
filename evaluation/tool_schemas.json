@@ -80,7 +80,7 @@
     "type": "function",
     "function": {
       "name": "vs_crop",
-      "description": "Crop the original source asset using normalized [x1,y1,x2,y2] coordinates.",
+      "description": "Crop the original source asset using normalized [x1,y1,x2,y2] coordinates in 0..1, for example [0.1,0.2,0.9,0.8]. Pixel values such as [0,637,1145,749] are invalid.",
       "parameters": {
         "type": "object",
         "properties": {
