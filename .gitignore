@@ -3,7 +3,6 @@
 __pycache__/
 *.pyc
 data/
-.env
 .env.local
 .DS_Store
 .env copy
@@ -12,3 +11,4 @@ outputs/
 /OpenSearch-VL-SFT-Agent-NoImages/
 *.bak_*
 /.codex/
+.venv-server/
