@@ -10,6 +10,7 @@ from pathlib import Path
 from evaluation.common import load_tasks, materialize_task_paths, read_predictions, write_json_atomic
 from evaluation.prepare import digest
 from evaluation.run import ROOT, SYSTEM, fingerprint, load_env, run_task, tool_definitions
+from evaluation.protocol import training_system, training_tools
 from evaluation.remote import APIClient, OpenRouterModel, parallel_results, output_lock
 
 
@@ -26,6 +27,9 @@ def parser():
     p.add_argument('--provider', help='Optional exact OpenRouter provider slug; fixes routing via provider.only')
     p.add_argument('--mode', choices=['agent', 'direct'], default='agent')
     p.add_argument('--max-steps', type=int, default=10)
+    p.add_argument('--protocol', choices=['eval', 'training'], default='training')
+    p.add_argument('--repetition-penalty', type=float, default=1.0)
+    p.add_argument('--repeat-limit', type=int, default=2)
     p.add_argument('--max-new-tokens', type=int, default=4096)
     p.add_argument('--context-tokens', type=int, default=32768)
     p.add_argument('--image-side', type=int, default=1536)
@@ -45,6 +49,8 @@ def main():
         p.error('Workers must be 1..64 and task counts positive')
     if a.max_steps < 1 or a.max_new_tokens < 1 or a.context_tokens <= a.max_new_tokens or not 64 <= a.image_side <= 2048 or a.max_pixels < 65536:
         p.error('Invalid step/token/image budget; Qwen image minimum is 65536 pixels')
+    if not 0.9 <= a.repetition_penalty <= 2.0 or a.repeat_limit < 0:
+        p.error('repetition_penalty must be 0.9..2.0 and repeat_limit nonnegative')
     load_env(a.env_file)
     if not a.check_only and not os.environ.get('OPENROUTER_API_KEY'):
         p.error('Missing OPENROUTER_API_KEY in environment or .env')
@@ -61,12 +67,15 @@ def main():
         tokenizer = AutoTokenizer.from_pretrained(str(a.tokenizer), local_files_only=True)
     except (OSError, ValueError, ImportError) as exc:
         p.error(f'Input/dependency check failed: {type(exc).__name__}: {exc}')
-    schemas = tool_definitions() if a.mode == 'agent' else []
+    schemas = [] if a.mode != 'agent' else (training_tools() if a.protocol == 'training' else tool_definitions())
+    system = training_system() if a.protocol == 'training' else SYSTEM
     shared_files = {ROOT / 'evaluation/run.py', ROOT / 'evaluation/common.py', ROOT / 'trajectory_sources.json',
                     ROOT / 'sources/registry.py', ROOT / 'sources/download.py',
                     *list((ROOT / 'agent').glob('*.py')), *list((ROOT / 'core').glob('*.py'))}
-    protocol = {'version': 'openrouter-shared-agent-v1', 'mode': a.mode, 'device': 'openrouter',
-                'dtype': 'provider_managed', 'system': SYSTEM, 'tools': schemas,
+    protocol = {'version': 'openrouter-shared-agent-v2', 'mode': a.mode, 'device': 'openrouter',
+                'dtype': 'provider_managed', 'system': system, 'tools': schemas,
+                'protocol': a.protocol, 'repetition_penalty': a.repetition_penalty,
+                'repeat_limit': a.repeat_limit,
                 'tasks_sha256': digest(a.tasks), 'selected_ids': [t['id'] for t in tasks],
                 **{k: getattr(a, k) for k in ['max_steps', 'max_new_tokens', 'context_tokens', 'max_pixels', 'image_side']},
                 'code_sha256': {str(f.relative_to(ROOT)): digest(f) for f in sorted(shared_files)},

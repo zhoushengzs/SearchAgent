@@ -27,7 +27,7 @@ def worker_commands(a):
     common = ['--model', model, '--tasks', str(a.tasks.resolve()), '--device', 'cuda',
               '--num-shards', str(len(devices)), '--expected-count', str(a.expected_count),
               '--env-file', str(a.env_file.resolve())]
-    for name in ['mode', 'dtype', 'max_steps', 'max_new_tokens', 'context_tokens', 'max_pixels', 'image_side']:
+    for name in ['mode', 'protocol', 'dtype', 'max_steps', 'max_new_tokens', 'context_tokens', 'max_pixels', 'image_side', 'repetition_penalty', 'repeat_limit']:
         common += ['--' + name.replace('_', '-'), str(getattr(a, name))]
     for name in ['limit', 'image_root', 'original_root']:
         if getattr(a, name) is not None:
@@ -99,6 +99,9 @@ def main():
     p.add_argument('--mode', choices=['agent', 'direct'], default='agent')
     p.add_argument('--dtype', choices=['bfloat16', 'float16', 'float32'], default='bfloat16')
     p.add_argument('--max-steps', type=int, default=10)
+    p.add_argument('--protocol', choices=['eval', 'training'], default='training')
+    p.add_argument('--repetition-penalty', type=float, default=1.0)
+    p.add_argument('--repeat-limit', type=int, default=2)
     p.add_argument('--max-new-tokens', type=int, default=4096)
     p.add_argument('--context-tokens', type=int, default=32768)
     p.add_argument('--max-pixels', type=int, default=262144)
@@ -113,6 +116,8 @@ def main():
     a = p.parse_args()
     if (a.expected_count is not None and a.expected_count < 1) or (a.limit is not None and a.limit < 1) or a.max_steps < 1 or a.max_new_tokens < 1 or a.context_tokens <= a.max_new_tokens or not 64 <= a.image_side <= 2048 or a.max_pixels < 1:
         p.error('Invalid task count or model budget')
+    if not 0.9 <= a.repetition_penalty <= 2.0 or a.repeat_limit < 0:
+        p.error('repetition_penalty must be 0.9..2.0 and repeat_limit nonnegative')
     try:
         tasks = load_tasks(a.tasks, a.expected_count)
         a.expected_count = len(tasks)

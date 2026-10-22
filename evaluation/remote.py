@@ -207,7 +207,7 @@ class OpenRouterModel:
                                                            add_generation_prompt=True, return_dict=False, **kwargs)
         return prepared, len(token_ids) + image_tokens
 
-    def generate(self, messages, tools, max_tokens, context_tokens):
+    def generate(self, messages, tools, max_tokens, context_tokens, **generation_kwargs):
         wire, estimated = self.prepare(messages, tools)
         if estimated + max_tokens > context_tokens:
             return {'text': '', 'status': 'context_limit', 'input_tokens': estimated, 'new_tokens': 0,
@@ -223,6 +223,9 @@ class OpenRouterModel:
             # The shared prompt requests one action, and the response check below
             # rejects multiple calls before the agent can execute any of them.
             payload.update(tools=tools, tool_choice='auto')
+        repetition_penalty = generation_kwargs.get('repetition_penalty')
+        if repetition_penalty is not None and float(repetition_penalty) != 1.0:
+            payload['repetition_penalty'] = float(repetition_penalty)
         body = self.client.post(payload)
         if body.get('model') != self.model:
             self.client.stop.set()
