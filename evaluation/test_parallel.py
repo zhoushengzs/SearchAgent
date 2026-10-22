@@ -171,7 +171,7 @@ class EvaluationRecoveryTests(unittest.TestCase):
                     text = '<response>answer from other evidence</response>'
                 return {'text': text, 'status': 'ok'}
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=2,
+            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=3,
                                    max_pixels=262144, max_new_tokens=64, context_tokens=1024)
             with patch('agent.tools.EvidenceTools.execute', return_value={'status': 'error', 'error_type': 'HTTPError', 'http_status': 403}):
                 record = run_task(task(0), Model(), args, tool_definitions(), 'fixture')
@@ -190,12 +190,12 @@ class EvaluationRecoveryTests(unittest.TestCase):
                     feedback = json.loads(messages[-1]['content'])
                     assert feedback['result']['error_type'] == 'InvalidArguments'
                     assert '[0,1]' in feedback['result']['detail']
-                    assert feedback['remaining_decisions'] == 1
-                    assert 'final response' in feedback['budget_notice']
+                    assert feedback['remaining_decisions'] == 2
+                    assert 'remaining budget' in feedback['budget_notice']
                     text = '<response>uncertain</response>'
                 return {'text': text, 'status': 'ok'}
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=2,
+            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=3,
                                    max_pixels=262144, max_new_tokens=64, context_tokens=1024)
             with patch('agent.tools.EvidenceTools.execute') as execute:
                 record = run_task(task(0), Model(), args, tool_definitions(), 'fixture')
@@ -234,6 +234,29 @@ class EvaluationRecoveryTests(unittest.TestCase):
         add_tool_error_feedback('visit', {'url': 'https://example.com/manual.PDF?x=1'}, visit,
                                 SimpleNamespace(assets={}), [])
         self.assertIn('PDF', visit['hint'])
+
+    def test_last_decision_forces_answer_without_tools(self):
+        class Model:
+            calls = 0
+            def generate(self, messages, schemas, max_tokens, context_tokens):
+                self.calls += 1
+                if self.calls == 1:
+                    return {'text': '<tool_call>{"name":"vs_web_search","arguments":{"query":"x"}}</tool_call>',
+                            'status': 'ok'}
+                assert schemas == [], schemas
+                assert 'FINAL DECISION' in messages[-1]['content']
+                return {'text': '<response>final answer</response>', 'status': 'ok'}
+        with tempfile.TemporaryDirectory() as folder:
+            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=2,
+                                   max_pixels=262144, max_new_tokens=64, context_tokens=1024)
+            with patch('agent.tools.EvidenceTools.execute',
+                       return_value={'tool': 'web_search', 'status': 'ok', 'data': {}}), \
+                 patch('agent.tools.EvidenceTools.configuration',
+                       return_value={'available_tools': ['web_search']}):
+                record = run_task(task(0), Model(), args, tool_definitions(), 'fixture')
+        self.assertEqual(record['status'], 'answered')
+        self.assertEqual(record['answer'], 'final answer')
+        self.assertTrue(record['turns'][-1].get('forced_answer'))
 
 
 class MergeTests(unittest.TestCase):
@@ -438,7 +461,7 @@ class ResumeAndFreshExecutionTests(unittest.TestCase):
                 return {'text': result, 'status': 'ok', 'input_tokens': 10, 'new_tokens': 10}
 
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=2,
+            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=3,
                                    max_pixels=262144, max_new_tokens=64, context_tokens=1024)
             record = run_task(task(0), FixtureModel(), args, tool_definitions(), 'fixture')
             self.assertEqual(record['status'], 'answered')

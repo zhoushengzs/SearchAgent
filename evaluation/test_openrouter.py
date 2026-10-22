@@ -146,6 +146,26 @@ class ConcurrencyTests(unittest.TestCase):
 
 
 class ScoringTests(unittest.TestCase):
+    def test_official_deepseek_judge_uses_explicit_thinking_and_output_budget(self):
+        body = {'model': 'deepseek-flash', 'choices': [{'finish_reason': 'stop', 'message': {
+            'content': '{"correct":true,"reason":"equivalent"}'}}]}
+        with tempfile.TemporaryDirectory() as folder:
+            fixture = self.fixture(folder)
+            args = fixture[0]
+            args.base_url = 'https://api.deepseek.com'
+            args.judge_model = 'deepseek-flash'
+            args.judge_thinking = 'disabled'
+            args.judge_max_tokens = 1024
+            with patch.object(APIClient, 'post', return_value=body) as post:
+                score_all(*fixture)
+            self.assertEqual(post.call_count, 4)
+            for call in post.call_args_list:
+                payload = call.args[0]
+                self.assertEqual(payload['model'], 'deepseek-flash')
+                self.assertEqual(payload['thinking'], {'type': 'disabled'})
+                self.assertEqual(payload['max_tokens'], 1024)
+                self.assertEqual(payload['response_format'], {'type': 'json_object'})
+
     def fixture(self, folder):
         args = SimpleNamespace(output=Path(folder), base_url='https://example.invalid/v1', judge_model='fixture', workers=3)
         tasks = {f'task_{i}': task(i) for i in range(4)}

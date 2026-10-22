@@ -40,12 +40,21 @@ def select_benchmark_sample(tasks, source=None, count=None, seed=42):
 
 
 def export_bundle(tasks_path, references_path, output, expected_count=3103,
-                  image_root=None, original_root=None, sample_source=None, sample_count=None, seed=42):
+                  image_root=None, original_root=None, sample_source=None, sample_count=None, seed=42,
+                  exclude_ids=(), exclusion_reason=''):
     output = Path(output).resolve()
     if output.exists():
         raise ValueError('Output already exists; choose a new directory')
     tasks = load_tasks(tasks_path, expected_count)
     tasks, selection = select_benchmark_sample(tasks, sample_source, sample_count, seed)
+    excluded = set(exclude_ids)
+    parent_count = len(tasks)
+    unknown = excluded - {t['id'] for t in tasks}
+    if unknown:
+        raise ValueError(f'Excluded IDs are absent from selected tasks: {sorted(unknown)}')
+    tasks = [t for t in tasks if t['id'] not in excluded]
+    if not tasks:
+        raise ValueError('Exclusions would remove all tasks')
     refs = list(rows(references_path))
     reference_map = {(r['id'], r['input_fingerprint']): r for r in refs}
     if len(reference_map) != len(refs):
@@ -85,6 +94,11 @@ def export_bundle(tasks_path, references_path, output, expected_count=3103,
                     'label': 'project_holdout_not_official_full_benchmark'}
         if selection is not None:
             manifest['selection'] = selection
+        if excluded:
+            manifest['exclusions'] = {'parent_task_count': parent_count,
+                                      'excluded_task_ids': sorted(excluded),
+                                      'reason': exclusion_reason or 'Explicit user-requested exclusions',
+                                      'selection_stage': 'post_hoc_subset'}
         dump(temporary / 'manifest.json', manifest)
         temporary.rename(output)
     except BaseException:
@@ -104,10 +118,12 @@ def main():
     p.add_argument('--sample-source', help='Benchmark to subsample; all other benchmarks are retained')
     p.add_argument('--sample-count', type=int)
     p.add_argument('--seed', type=int, default=42)
+    p.add_argument('--exclude-id', action='append', default=[], help='Exclude an exact task ID; repeat as needed')
+    p.add_argument('--exclusion-reason', default='')
     a = p.parse_args()
     try:
         result = export_bundle(a.tasks, a.references, a.output, a.expected_count, a.image_root, a.original_root,
-                               a.sample_source, a.sample_count, a.seed)
+                               a.sample_source, a.sample_count, a.seed, a.exclude_id, a.exclusion_reason)
     except (OSError, ValueError, KeyError) as exc:
         p.error(str(exc))
     print(json.dumps({'output': str(a.output.resolve()), 'tasks': result['task_count'],

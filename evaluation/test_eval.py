@@ -28,8 +28,19 @@ class ActionBoundaryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_output('<tool_call>{"name":"vs_visit","arguments":{}}</tool_call><response>42</response>')
 
-    def test_original_model_can_answer_without_sft_tags(self):
-        self.assertEqual(parse_output('The answer is 42.'), ('answer', 'The answer is 42.'))
+    def test_final_answers_require_tags_for_both_models(self):
+        for text in ('The answer is 42.', '', '<think>42</think>',
+                     '<response>42', 'prefix <response>42</response>',
+                     '<response>42</response> suffix', '<response><response>42</response>',
+                     '<response>42</response></response>', '<response> </response>'):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                parse_output(text)
+
+    def test_tagged_final_answers_allow_reasoning_and_whitespace(self):
+        for text in ('<response>42</response>', ' \n<response> 42 </response>\n',
+                     '<think>Consider the evidence.</think><response>42</response>'):
+            with self.subTest(text=text):
+                self.assertEqual(parse_output(text), ('answer', '42'))
 
     def test_lists_do_not_execute_generated_code(self):
         text = '__import__("os").getcwd()'
