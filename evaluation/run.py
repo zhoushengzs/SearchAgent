@@ -387,6 +387,9 @@ def run_task(task, model, a, schemas, run_id):
                 turn['tool_call'] = value
                 record['status'] = 'step_limit'
                 break
+            # Every observed tool result needs its original assistant action,
+            # including rejected arguments, unavailable tools and duplicates.
+            history.append({'role': 'assistant', 'content': text})
             exec_name, exec_args = value['name'], value['arguments']
             if protocol == 'training':
                 try:
@@ -415,7 +418,6 @@ def run_task(task, model, a, schemas, run_id):
                     break
                 continue
             seen[key] = step
-            history.append({'role': 'assistant', 'content': text})
             if exec_name not in allowed:
                 record.update(status='unavailable_tool', error='Requested tool is outside the supplied schemas')
                 break

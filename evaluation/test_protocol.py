@@ -57,6 +57,39 @@ class ProtocolTests(unittest.TestCase):
 
 
 class GuardTests(unittest.TestCase):
+    def test_rejected_and_duplicate_actions_keep_matching_remote_tool_history(self):
+        from evaluation.remote import OpenRouterModel
+
+        class Tokenizer:
+            def apply_chat_template(self, messages, **kwargs):
+                return [1, 2, 3]
+
+        class Model:
+            calls = 0
+            wire = OpenRouterModel('fixture', Tokenizer(), None)
+            def generate(self, messages, schemas, max_tokens, context_tokens, **kwargs):
+                self.wire.prepare(messages, schemas)  # Raises on an orphan tool result.
+                self.calls += 1
+                if self.calls == 1:
+                    text = '<tool_call>{"name":"layout_parsing","arguments":{"image":"img_1"}}</tool_call>'
+                elif schemas:
+                    text = '<tool_call>{"name":"vs_web_search","arguments":{"query":"same"}}</tool_call>'
+                else:
+                    text = '<response>done</response>'
+                return {'text': text, 'status': 'ok'}
+
+        with tempfile.TemporaryDirectory() as folder:
+            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=6,
+                                   max_pixels=262144, max_new_tokens=64, context_tokens=1024,
+                                   protocol='training', repetition_penalty=1.1, repeat_limit=2)
+            with patch('agent.tools.EvidenceTools.execute',
+                       return_value={'tool': 'web_search', 'status': 'ok', 'data': {}}):
+                record = run_task(fake_task(), Model(), args, tool_definitions(), 'fixture')
+        self.assertEqual(record['status'], 'answered')
+        self.assertFalse(record['infrastructure_error'])
+        self.assertEqual(record['duplicate_calls'], 2)
+        self.assertEqual(record['tool_calls'], 1)
+
     def test_duplicate_calls_are_not_executed_and_force_a_final_answer(self):
         class Model:
             calls = 0
