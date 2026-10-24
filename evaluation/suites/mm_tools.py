@@ -17,7 +17,8 @@ import requests
 import jsonschema
 from PIL import Image
 
-BASE = Path(os.environ.get('EVAL_OFFICIAL_ROOT', str(Path(__file__).resolve().parents[2] / 'outputs/official_eval_dependencies')))
+from evaluation.suites.runtime import official_root
+BASE = official_root()
 sys.path.insert(0, str(BASE / 'Agent-R1'))
 from agent_r1.tool.base import BaseTool
 

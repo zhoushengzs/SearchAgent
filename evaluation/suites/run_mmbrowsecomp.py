@@ -16,8 +16,9 @@ from datetime import datetime, timezone
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-BASE = Path(os.environ.get('EVAL_OFFICIAL_ROOT', str(ROOT / 'outputs/official_eval_dependencies')))
 sys.path.insert(0, str(ROOT))
+from evaluation.suites.runtime import official_root
+BASE = official_root()
 from evaluation.run import load_env
 from evaluation.common import load_tasks, materialize_task_paths
 
@@ -171,7 +172,7 @@ def main():
     load_env(ROOT / '.env')
     if args.search_backend=='serper':
         os.environ['SERPER_API_KEY'] = os.environ.get(args.search_key_env, '')
-    os.environ['PLAYWRIGHT_BROWSERS_PATH'] = str(BASE / 'browsers')
+    os.environ.setdefault('PLAYWRIGHT_BROWSERS_PATH', str(BASE / 'browsers'))
     sys.path.insert(0, str(BASE / 'Agent-R1'))
     tasks = prepare(args)
     search_needed = ['BRIGHTDATA_API_KEY','BRIGHTDATA_SERP_ZONE'] if args.search_backend=='brightdata' else ['SERPER_API_KEY']

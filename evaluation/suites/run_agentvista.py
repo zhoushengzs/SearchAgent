@@ -11,8 +11,9 @@ from datetime import datetime, timezone
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-BASE = Path(os.environ.get('EVAL_OFFICIAL_ROOT', str(ROOT / 'outputs/official_eval_dependencies')))
 sys.path.insert(0, str(ROOT))
+from evaluation.suites.runtime import official_root
+BASE = official_root()
 from evaluation.run import load_env
 from evaluation.common import load_tasks, materialize_task_paths
 

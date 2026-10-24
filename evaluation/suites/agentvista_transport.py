@@ -5,8 +5,9 @@ from pathlib import Path
 import runpy
 import sys
 
-BASE = Path(os.environ.get('EVAL_OFFICIAL_ROOT', str(Path(__file__).resolve().parents[2] / 'outputs/official_eval_dependencies')))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from evaluation.suites.runtime import official_root
+BASE = official_root()
 REPO = BASE / 'AgentVista'
 sys.path.insert(0, str(REPO))
 from engine.api import api_caller

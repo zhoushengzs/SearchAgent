@@ -13,3 +13,11 @@ outputs/
 *.bak_*
 /.codex/
 .venv-server/
+
+# Official dependency sources are installed at pinned upstream revisions.
+/official_eval/AgentVista/
+/official_eval/Agent-R1/
+/official_eval/MM-BrowseComp/
+/official_eval/browsers/
+/official_eval/env/
+/official_eval/results/

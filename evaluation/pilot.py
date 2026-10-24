@@ -16,6 +16,7 @@ from evaluation.package import export_bundle
 from evaluation.prepare import digest
 from evaluation.run import load_env
 from evaluation.suites.setup import verify
+from evaluation.suites.runtime import official_root
 
 ROOT = Path(__file__).resolve().parents[1]
 ROUTES = {'agentvista': 'official_agentvista', 'mmbrowsecomp': 'paper_reconstruction_mmbrowsecomp'}
@@ -100,7 +101,7 @@ def main():
     p.add_argument('--seed', type=int, default=42)
     p.add_argument('--expected-count', type=int, default=778)
     p.add_argument('--device', choices=['mps', 'cuda', 'cpu'], default='mps')
-    p.add_argument('--official-root', type=Path, default=ROOT / 'outputs/official_eval_dependencies')
+    p.add_argument('--official-root', type=Path, default=official_root())
     p.add_argument('--search-key-env', default='SERPER_API_KEY')
     p.add_argument('--prepare-only', action='store_true')
     a = p.parse_args()

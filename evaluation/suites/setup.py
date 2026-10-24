@@ -2,11 +2,20 @@
 import argparse
 from pathlib import Path
 import subprocess
+import os
+import sys
+
+from evaluation.suites.runtime import official_root
 
 REPOSITORIES = {
     'AgentVista': ('https://github.com/hkust-nlp/AgentVista.git', 'a3385d51d0c3dd0c8501350a08d52065e3e94ab4'),
     'Agent-R1': ('https://github.com/0russwest0/Agent-R1.git', 'b124aa46534cbf2fb8bc8af11405774984c42ac7'),
     'MM-BrowseComp': ('https://github.com/MMBrowseComp/MM-BrowseComp.git', 'cf82a2390aa7a7ed3d96f72969d22548eff3e101'),
+}
+SOURCE_DIRECTORIES = {
+    'AgentVista': ['configs', 'engine', 'prompts', 'search', 'tools', 'utils'],
+    'Agent-R1': ['agent_r1'],
+    'MM-BrowseComp': ['src'],
 }
 
 
@@ -22,15 +31,20 @@ def verify(root):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--root', type=Path, default=Path('outputs/official_eval_dependencies'))
+    p.add_argument('--root', type=Path, default=official_root())
+    p.add_argument('--install-browser', action='store_true', help='Install Chromium for the browsing tool')
     a = p.parse_args()
     a.root.mkdir(parents=True, exist_ok=True)
     for name, (url, revision) in REPOSITORIES.items():
         path = a.root / name
         if not path.exists():
             subprocess.run(['git', 'clone', '--filter=blob:none', '--no-checkout', url, str(path)], check=True)
+            subprocess.run(['git', '-C', str(path), 'sparse-checkout', 'set', *SOURCE_DIRECTORIES[name]], check=True)
             subprocess.run(['git', '-C', str(path), 'checkout', '--detach', revision], check=True)
     print(verify(a.root))
+    if a.install_browser:
+        subprocess.run([sys.executable, '-m', 'playwright', 'install', 'chromium'], check=True,
+                       env=dict(os.environ, PLAYWRIGHT_BROWSERS_PATH=str(a.root.resolve() / 'browsers')))
 
 
 if __name__ == '__main__':
