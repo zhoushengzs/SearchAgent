@@ -171,7 +171,7 @@ class EvaluationRecoveryTests(unittest.TestCase):
                     text = '<response>answer from other evidence</response>'
                 return {'text': text, 'status': 'ok'}
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=3,
+            args = SimpleNamespace(tool_summaries=False, output=Path(folder), image_side=512, mode='agent', max_steps=3,
                                    max_pixels=262144, max_new_tokens=64, context_tokens=1024)
             with patch('agent.tools.EvidenceTools.execute', return_value={'status': 'error', 'error_type': 'HTTPError', 'http_status': 403}):
                 record = run_task(task(0), Model(), args, tool_definitions(), 'fixture')
@@ -179,7 +179,7 @@ class EvaluationRecoveryTests(unittest.TestCase):
             self.assertFalse(record['infrastructure_error'])
             self.assertEqual(record['tool_errors'], 1)
 
-    def test_pixel_crop_is_rejected_with_repair_guidance_and_last_decision_notice(self):
+    def test_pixel_crop_is_rejected_with_same_decision_repair_feedback(self):
         class Model:
             calls = 0
             def generate(self, messages, *args):
@@ -187,22 +187,21 @@ class EvaluationRecoveryTests(unittest.TestCase):
                 if self.calls == 1:
                     text = '<tool_call>{"name":"vs_crop","arguments":{"asset_id":"image_1","bbox":[0,637,1145,749]}}</tool_call>'
                 else:
-                    feedback = json.loads(messages[-1]['content'])
-                    assert feedback['result']['error_type'] == 'InvalidArguments'
-                    assert '[0,1]' in feedback['result']['detail']
-                    assert feedback['remaining_decisions'] == 2
-                    assert 'remaining budget' in feedback['budget_notice']
+                    feedback = messages[-1]['content']
+                    assert 'no tool was executed' in feedback
+                    assert 'Crop needs a valid source-coordinate bbox' in feedback
                     text = '<response>uncertain</response>'
                 return {'text': text, 'status': 'ok'}
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=3,
+            args = SimpleNamespace(tool_summaries=False, output=Path(folder), image_side=512, mode='agent', max_steps=3,
                                    max_pixels=262144, max_new_tokens=64, context_tokens=1024)
             with patch('agent.tools.EvidenceTools.execute') as execute:
                 record = run_task(task(0), Model(), args, tool_definitions(), 'fixture')
                 execute.assert_not_called()
             self.assertEqual(record['status'], 'answered')
             self.assertFalse(record['infrastructure_error'])
-            self.assertEqual(record['tool_errors'], 1)
+            self.assertEqual(record['tool_errors'], 0)
+            self.assertEqual([t['step'] for t in record['turns']], [1, 1])
 
     def test_pixel_crop_feedback_includes_concrete_normalized_bbox(self):
         from PIL import Image
@@ -247,7 +246,7 @@ class EvaluationRecoveryTests(unittest.TestCase):
                 assert 'FINAL DECISION' in messages[-1]['content']
                 return {'text': '<response>final answer</response>', 'status': 'ok'}
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=2,
+            args = SimpleNamespace(tool_summaries=False, output=Path(folder), image_side=512, mode='agent', max_steps=2,
                                    max_pixels=262144, max_new_tokens=64, context_tokens=1024)
             with patch('agent.tools.EvidenceTools.execute',
                        return_value={'tool': 'web_search', 'status': 'ok', 'data': {}}), \
@@ -354,7 +353,7 @@ class MergeTests(unittest.TestCase):
             commands = [(str(rank), [sys.executable, '-c',
                          f'import os; assert os.environ["CUDA_VISIBLE_DEVICES"] == "{rank}"'])
                         for rank in range(8)]
-            launch_workers(SimpleNamespace(output=root, tasks=tasks), commands)
+            launch_workers(SimpleNamespace(tool_summaries=False, output=root, tasks=tasks), commands)
             self.assertTrue((root / 'merged/predictions.jsonl').is_file())
             self.assertEqual(len(list((root / 'logs').glob('*.log'))), 8)
 
@@ -364,7 +363,7 @@ class MergeTests(unittest.TestCase):
             root = Path(folder)
             tasks, _, _ = self.fixture(root, count=1)
             with self.assertRaises(ValueError):
-                launch_workers(SimpleNamespace(output=root, tasks=tasks),
+                launch_workers(SimpleNamespace(tool_summaries=False, output=root, tasks=tasks),
                                [('0', [sys.executable, '-c', 'raise SystemExit(7)'])])
             self.assertFalse((root / 'merged').exists())
 
@@ -461,7 +460,7 @@ class ResumeAndFreshExecutionTests(unittest.TestCase):
                 return {'text': result, 'status': 'ok', 'input_tokens': 10, 'new_tokens': 10}
 
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=3,
+            args = SimpleNamespace(tool_summaries=False, output=Path(folder), image_side=512, mode='agent', max_steps=3,
                                    max_pixels=262144, max_new_tokens=64, context_tokens=1024)
             record = run_task(task(0), FixtureModel(), args, tool_definitions(), 'fixture')
             self.assertEqual(record['status'], 'answered')

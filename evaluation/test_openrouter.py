@@ -38,7 +38,7 @@ class TransportTests(unittest.TestCase):
         first = self.body({'tool_calls': [{'function': {'name': 'vs_calculate', 'arguments': '{"expression":"1+2"}'}}]}, 'tool_calls')
         model = self.model([first, self.body({'content': '<response>3</response>'})])
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=1536, mode='agent', max_steps=30,
+            args = SimpleNamespace(tool_summaries=False, output=Path(folder), image_side=1536, mode='agent', max_steps=30,
                                    max_pixels=262144, max_new_tokens=4096, context_tokens=32768)
             result = run_task(task(1), model, args, tool_definitions(), 'test-run')
         self.assertEqual(result['status'], 'answered')
@@ -167,7 +167,7 @@ class ScoringTests(unittest.TestCase):
                 self.assertEqual(payload['response_format'], {'type': 'json_object'})
 
     def fixture(self, folder):
-        args = SimpleNamespace(output=Path(folder), base_url='https://example.invalid/v1', judge_model='fixture', workers=3)
+        args = SimpleNamespace(tool_summaries=False, output=Path(folder), base_url='https://example.invalid/v1', judge_model='fixture', workers=3)
         tasks = {f'task_{i}': task(i) for i in range(4)}
         predictions = {key: {'id': key, 'source_dataset': 'fixture', 'input_fingerprint': t['input_fingerprint'],
                             'status': 'answered', 'answer': '3', 'tool_calls': 1, 'elapsed_seconds': 1}

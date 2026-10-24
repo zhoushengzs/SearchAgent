@@ -1,7 +1,13 @@
 -r ../requirements.txt
 
 # Match the model API already verified by the local evaluator.
-# Install a CUDA-compatible PyTorch build for the server driver first.
+# IMPORTANT: install a CUDA-compatible torch/torchvision from the PyTorch CUDA index FIRST
+#   CUDA 13.x: python -m pip --isolated install torch==2.14.0 torchvision==0.29.0 \
+#              --index-url https://download.pytorch.org/whl/cu130
+#   CUDA 12.x: ... --index-url https://download.pytorch.org/whl/cu126
+# The pinned nvidia-cudnn-cu13==9.24.0.43 exists on the PyTorch cu130 index, NOT on PyPI.
+# Do NOT install this file against default PyPI first: PyPI torch may require a
+# nvidia-cudnn-cu13 version that PyPI does not host (no matching distribution).
 torch==2.14.0
 # Qwen3-VL's fast image processor imports torchvision; version must match torch.
 torchvision==0.29.0

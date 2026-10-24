@@ -10,16 +10,16 @@ from evaluation.run import available_tool_definitions, initial_message, run_task
 
 
 class ToolNameTests(unittest.TestCase):
-    def test_plain_final_answer_is_a_model_format_error(self):
+    def test_plain_final_answer_is_retained_after_explicit_final_request(self):
         with tempfile.TemporaryDirectory() as folder:
             model = SimpleNamespace(generate=lambda *args: {'text': '42', 'status': 'ok'})
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent',
+            args = SimpleNamespace(tool_summaries=False, output=Path(folder), image_side=512, mode='agent',
                                    max_steps=3, max_pixels=512, max_new_tokens=64, context_tokens=1024)
             task = {'id': 'fixture', 'input_fingerprint': 'fixture', 'source_dataset': 'fixture',
                     'model_input': {'question': 'test', 'images': []}}
             record = run_task(task, model, args, tool_definitions(), 'fixture')
-            self.assertEqual(record['status'], 'invalid_output')
-            self.assertEqual(record['answer'], '')
+            self.assertEqual(record['status'], 'answered')
+            self.assertEqual(record['answer'], '42')
             self.assertFalse(record['infrastructure_error'])
 
     def test_initial_list_matches_definitions_and_preserves_disabled_tools(self):
@@ -44,14 +44,15 @@ class ToolNameTests(unittest.TestCase):
                 model = SimpleNamespace(generate=lambda *args: {
                     'text': '<tool_call>' + json.dumps({'name': name, 'arguments': {}}) + '</tool_call>',
                     'status': 'ok'})
-                args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent',
+                args = SimpleNamespace(tool_summaries=False, output=Path(folder), image_side=512, mode='agent',
                                        max_steps=3, max_pixels=512, max_new_tokens=64, context_tokens=1024)
                 task = {'id': 'fixture', 'input_fingerprint': 'fixture', 'source_dataset': 'fixture',
                         'model_input': {'question': 'test', 'images': []}}
                 with patch('agent.tools.EvidenceTools.execute') as execute:
                     record = run_task(task, model, args, tool_definitions(), 'fixture')
                     execute.assert_not_called()
-                self.assertEqual(record['status'], 'unavailable_tool')
+                self.assertEqual(record['status'], 'step_limit')
+                self.assertTrue(record['final_answer_unavailable'])
                 self.assertFalse(record['infrastructure_error'])
 
 

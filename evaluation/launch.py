@@ -29,6 +29,7 @@ def worker_commands(a):
               '--env-file', str(a.env_file.resolve())]
     for name in ['mode', 'protocol', 'dtype', 'max_steps', 'max_new_tokens', 'context_tokens', 'max_pixels', 'image_side', 'repetition_penalty', 'repeat_limit']:
         common += ['--' + name.replace('_', '-'), str(getattr(a, name))]
+    common.append('--tool-summaries' if getattr(a, 'tool_summaries', True) else '--no-tool-summaries')
     for name in ['limit', 'image_root', 'original_root']:
         if getattr(a, name) is not None:
             value = getattr(a, name)
@@ -97,6 +98,7 @@ def main():
     p.add_argument('--gpus', default=os.environ.get('CUDA_VISIBLE_DEVICES') or '0,1,2,3,4,5,6,7')
     p.add_argument('--expected-count', type=int, help='Optional extra count check; portable bundles declare their full count')
     p.add_argument('--mode', choices=['agent', 'direct'], default='agent')
+    p.add_argument('--tool-summaries', action=argparse.BooleanOptionalAction, default=True)
     p.add_argument('--dtype', choices=['bfloat16', 'float16', 'float32'], default='bfloat16')
     p.add_argument('--max-steps', type=int, default=10)
     p.add_argument('--protocol', choices=['eval', 'training'], default='training')

@@ -9,8 +9,9 @@ from pathlib import Path
 
 from evaluation.common import load_tasks, materialize_task_paths, read_predictions, write_json_atomic
 from evaluation.prepare import digest
-from evaluation.run import ROOT, SYSTEM, fingerprint, load_env, run_task, tool_definitions
+from evaluation.run import ROOT, SYSTEM, VALIDATION_ATTEMPTS, fingerprint, load_env, run_task, tool_definitions
 from evaluation.protocol import training_system, training_tools
+from evaluation.execution import execution_policy
 from evaluation.remote import APIClient, OpenRouterModel, parallel_results, output_lock
 
 
@@ -26,6 +27,7 @@ def parser():
     p.add_argument('--workers', type=int, default=16)
     p.add_argument('--provider', help='Optional exact OpenRouter provider slug; fixes routing via provider.only')
     p.add_argument('--mode', choices=['agent', 'direct'], default='agent')
+    p.add_argument('--tool-summaries', action=argparse.BooleanOptionalAction, default=True)
     p.add_argument('--max-steps', type=int, default=10)
     p.add_argument('--protocol', choices=['eval', 'training'], default='training')
     p.add_argument('--repetition-penalty', type=float, default=1.0)
@@ -69,13 +71,16 @@ def main():
         p.error(f'Input/dependency check failed: {type(exc).__name__}: {exc}')
     schemas = [] if a.mode != 'agent' else (training_tools() if a.protocol == 'training' else tool_definitions())
     system = training_system() if a.protocol == 'training' else SYSTEM
-    shared_files = {ROOT / 'evaluation/run.py', ROOT / 'evaluation/common.py', ROOT / 'trajectory_sources.json',
+    shared_files = {ROOT / 'evaluation/run.py', ROOT / 'evaluation/common.py', ROOT / 'evaluation/protocol.py', ROOT / 'evaluation/execution.py',
+                    ROOT / 'evaluation/training_protocol/tools.json', ROOT / 'evaluation/training_protocol/system.txt',
+                    ROOT / 'trajectory_sources.json',
                     ROOT / 'sources/registry.py', ROOT / 'sources/download.py',
                     *list((ROOT / 'agent').glob('*.py')), *list((ROOT / 'core').glob('*.py'))}
-    protocol = {'version': 'openrouter-shared-agent-v2', 'mode': a.mode, 'device': 'openrouter',
+    protocol = {'version': 'openrouter-shared-agent-v4', 'mode': a.mode, 'device': 'openrouter',
                 'dtype': 'provider_managed', 'system': system, 'tools': schemas,
                 'protocol': a.protocol, 'repetition_penalty': a.repetition_penalty,
-                'repeat_limit': a.repeat_limit,
+                'repeat_limit': a.repeat_limit, 'validation_attempts': VALIDATION_ATTEMPTS,
+                'execution_policy': execution_policy(a.tool_summaries),
                 'tasks_sha256': digest(a.tasks), 'selected_ids': [t['id'] for t in tasks],
                 **{k: getattr(a, k) for k in ['max_steps', 'max_new_tokens', 'context_tokens', 'max_pixels', 'image_side']},
                 'code_sha256': {str(f.relative_to(ROOT)): digest(f) for f in sorted(shared_files)},

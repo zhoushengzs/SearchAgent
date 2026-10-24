@@ -21,7 +21,7 @@ class ProtocolTests(unittest.TestCase):
     def test_training_assets_match_the_saved_sft_prompt_and_tools(self):
         self.assertIn('Tool action supervision does not imply', protocol.training_system())
         names = [tool['function']['name'] for tool in protocol.training_tools()]
-        self.assertEqual(names, ['image_search', 'text_search', 'web_search', 'layout_parsing', 'crop',
+        self.assertEqual(names, ['text_search', 'web_search', 'crop',
                                  'vs_web_search', 'vs_image_search', 'vs_visit', 'vs_inspect_image',
                                  'vs_crop', 'vs_calculate'])
 
@@ -38,7 +38,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(state['remaining_decisions'], 8)
         self.assertEqual(state['attached_images'][0]['image_index'], 1)
         self.assertEqual(state['tool_configuration']['available_tools'],
-                         protocol.STATE_AVAILABLE_TOOLS)
+                         [t['function']['name'] for t in protocol.training_tools()])
         self.assertEqual([block.get('type') for block in message['content']], ['text', 'image', 'text', 'text'])
 
     def test_native_tool_names_map_onto_project_tools(self):
@@ -79,7 +79,7 @@ class GuardTests(unittest.TestCase):
                 return {'text': text, 'status': 'ok'}
 
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=6,
+            args = SimpleNamespace(tool_summaries=False, output=Path(folder), image_side=512, mode='agent', max_steps=6,
                                    max_pixels=262144, max_new_tokens=64, context_tokens=1024,
                                    protocol='training', repetition_penalty=1.1, repeat_limit=2)
             with patch('agent.tools.EvidenceTools.execute',
@@ -101,7 +101,7 @@ class GuardTests(unittest.TestCase):
                 assert 'FINAL DECISION' in messages[-1]['content']
                 return {'text': '<response>final answer</response>', 'status': 'ok'}
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=5,
+            args = SimpleNamespace(tool_summaries=False, output=Path(folder), image_side=512, mode='agent', max_steps=5,
                                    max_pixels=262144, max_new_tokens=64, context_tokens=1024,
                                    protocol='eval', repetition_penalty=1.0, repeat_limit=2)
             with patch('agent.tools.EvidenceTools.execute',
@@ -122,7 +122,7 @@ class GuardTests(unittest.TestCase):
                 self.seen = kwargs
                 return {'text': '<response>ok</response>', 'status': 'ok'}
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=1,
+            args = SimpleNamespace(tool_summaries=False, output=Path(folder), image_side=512, mode='agent', max_steps=1,
                                    max_pixels=262144, max_new_tokens=64, context_tokens=1024,
                                    protocol='eval', repetition_penalty=1.1, repeat_limit=0)
             model = Model()
@@ -141,7 +141,7 @@ class GuardTests(unittest.TestCase):
                             'status': 'ok'}
                 return {'text': '<response>done</response>', 'status': 'ok'}
         with tempfile.TemporaryDirectory() as folder:
-            args = SimpleNamespace(output=Path(folder), image_side=512, mode='agent', max_steps=2,
+            args = SimpleNamespace(tool_summaries=False, output=Path(folder), image_side=512, mode='agent', max_steps=2,
                                    max_pixels=262144, max_new_tokens=64, context_tokens=1024,
                                    protocol='training', repetition_penalty=1.0, repeat_limit=0)
             model = Model()

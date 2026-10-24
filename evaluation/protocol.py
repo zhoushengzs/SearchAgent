@@ -1,8 +1,8 @@
 """Shared training-format protocol for SFT and Base evaluation.
 
 The SFT model was trained on step-wise decisions that include a refreshed state
-(attached_images, executed_prefix_step_ids, remaining_decisions), the exact
-training system prompt and the training tool schemas.  This module reproduces
+(attached_images, executed_prefix_step_ids, remaining_decisions), the training
+system prompt and executable subset of its tool schemas.  This module reproduces
 that input distribution so both models are evaluated under one protocol.
 """
 from __future__ import annotations
@@ -14,11 +14,6 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent
 TRAINING_SYSTEM = (BASE / 'training_protocol' / 'system.txt').read_text(encoding='utf-8').strip()
 TRAINING_TOOLS = json.loads((BASE / 'training_protocol' / 'tools.json').read_text(encoding='utf-8'))
-# The state recorded in the SFT data listed these capability names; keep them
-# verbatim so the state distribution matches training.  Execution still uses
-# the real project tools through the mapping below.
-STATE_AVAILABLE_TOOLS = ['abstain', 'calculate', 'crop', 'finish', 'image_search',
-                         'inspect_image', 'visit', 'web_search']
 STATE_HEADER = ('Recorded task state follows. Historical hypotheses and observer notes can be wrong; '
                 'use them as context, not ground truth. Choose the next action from the evidence '
                 'available at this decision.\n')
@@ -29,7 +24,9 @@ def training_system() -> str:
 
 
 def training_tools() -> list:
-    return copy.deepcopy(TRAINING_TOOLS)
+    # Retain the saved training assets for provenance; expose executable tools only.
+    return copy.deepcopy([tool for tool in TRAINING_TOOLS
+                          if tool['function']['name'] not in {'image_search', 'layout_parsing'}])
 
 
 def state_message(task, tools, initial_views, attached, executed, step, max_steps, max_pixels):
@@ -40,7 +37,7 @@ def state_message(task, tools, initial_views, attached, executed, step, max_step
         content.append({'type': 'image', 'image': image['path'], 'max_pixels': max_pixels})
         content.append({'type': 'text', 'text': '\n'})
     configuration = dict(tools.configuration())
-    configuration['available_tools'] = list(STATE_AVAILABLE_TOOLS)
+    configuration['available_tools'] = [tool['function']['name'] for tool in training_tools()]
     state = {
         'question': task['model_input']['question'],
         'initial_views': initial_views,
@@ -54,10 +51,10 @@ def state_message(task, tools, initial_views, attached, executed, step, max_step
     return {'role': 'user', 'content': content}
 
 
-def observation_message(step: int, result: dict) -> dict:
-    """Training observations are {step, result, observation}; no budget wrapper."""
+def observation_message(step: int, result: dict, observation=None) -> dict:
+    """Keep real tool evidence separate from the optional model-generated summary."""
     return {'role': 'tool', 'content': json.dumps(
-        {'step': step, 'result': result, 'observation': None}, ensure_ascii=False)}
+        {'step': step, 'result': result, 'observation': observation}, ensure_ascii=False)}
 
 
 def _dimensions(attached, reference):
