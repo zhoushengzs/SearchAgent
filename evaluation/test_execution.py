@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from evaluation.execution import execute_with_retries, final_content, observe_result
+from evaluation.execution import execute_with_retries, final_content, observe_result, execution_policy
 from evaluation.remote import APIClient, RemoteFatalError
 from evaluation.run import run_task, tool_definitions
 from evaluation.test_validation_retry import SequenceModel, call
@@ -26,11 +26,32 @@ class ObservationTests(unittest.TestCase):
             args = SimpleNamespace(output=Path(directory), image_side=512, mode='agent',
                                    max_steps=3, max_pixels=262144, max_new_tokens=128,
                                    context_tokens=4096, protocol='training', tool_summaries=summaries)
+            if summaries is None:
+                del args.tool_summaries
             task = {'id': 'fixture', 'source_dataset': 'fixture', 'input_fingerprint': 'fixture',
                     'model_input': {'question': 'Use only this question.', 'images': []}}
             with patch('agent.tools.EvidenceTools.execute', side_effect=result), patch('evaluation.execution.time.sleep'):
                 record = run_task(task, model, args, tool_definitions(), 'fixture')
         return record, model
+
+    def test_default_reads_raw_results_without_an_extra_model_call(self):
+        result = {'tool': 'web_search', 'status': 'ok',
+                  'data': {'results': [{'snippet': 'The page states 42.'}]}}
+        with patch('evaluation.run.observe_result') as observer:
+            record, model = self.evaluate([
+                call('vs_web_search', {'query': 'q'}), '<response>42</response>'],
+                [result], summaries=None)
+        observer.assert_not_called()
+        self.assertEqual(len(model.messages), 2)
+        self.assertEqual(record['answer'], '42')
+        self.assertEqual(record['observations'], [])
+        feedback = next(m for m in model.messages[-1] if m['role'] == 'tool')
+        payload = json.loads(feedback['content'])
+        self.assertEqual(payload['result'], result)
+        self.assertIsNone(payload['observation'])
+        self.assertFalse(execution_policy()['tool_summaries'])
+        self.assertIsNone(execution_policy()['observer'])
+        self.assertEqual(execution_policy()['observer_attempts'], 0)
 
     def test_summary_and_raw_evidence_reach_next_decision_with_matching_tool_envelope(self):
         summary = observation(language_facts=['The page states 42.'])

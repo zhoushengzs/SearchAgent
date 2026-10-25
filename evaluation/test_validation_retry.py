@@ -30,6 +30,26 @@ class SequenceModel:
 
 
 class ValidationRetryTests(unittest.TestCase):
+    def test_truncated_final_answer_requests_a_short_result_instead_of_repeating_the_table(self):
+        result, model, executions = self.run_sequence([
+            {'text':'<response>Long item table', 'status':'length', 'stop_reason':'token_limit'},
+            '<response>Insufficient evidence.</response>'], max_steps=1)
+        self.assertEqual(result['answer'], 'Insufficient evidence.')
+        self.assertEqual(executions, 0)
+        feedback = '\n'.join(m['content'] for m in model.messages[1] if isinstance(m.get('content'), str))
+        self.assertIn('at most two short sentences', feedback)
+        self.assertIn('do not invent', feedback)
+
+    def test_pixel_crop_feedback_explains_normalized_coordinates_and_allows_correction(self):
+        result, model, executions = self.run_sequence([
+            call('vs_crop', {'asset_id':'image_1','bbox':[0,0,1000,800]}),
+            call('vs_crop', {'asset_id':'image_1','bbox':[0,0,1,1]}),
+            '<response>answer</response>'])
+        self.assertEqual(result['answer'], 'answer')
+        self.assertEqual(executions, 1)
+        self.assertIn('normalized to 0..1', model.messages[1][-1]['content'])
+        self.assertIn('[0,0,1,1]', model.messages[1][-1]['content'])
+
     def run_sequence(self, replies, max_steps=3):
         model = SequenceModel(replies)
         with tempfile.TemporaryDirectory() as directory:

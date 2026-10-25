@@ -32,11 +32,14 @@ def canonical_call(name, args, names):
 
 
 class LocalCompletionClient:
-    def __init__(self, model_path, device='mps', answer_tag=None, model=None):
+    def __init__(self, model_path, device='mps', answer_tag=None, model=None, audit_path=None,
+                 generation_limits=None):
         from evaluation.run import LocalModel
         self.model = model or LocalModel(str(Path(model_path).resolve()), device, 'bfloat16')
         self.path = str(Path(model_path).resolve())
         self.answer_tag = answer_tag
+        self.audit_path = Path(audit_path) if audit_path else None
+        self.generation_limits = dict(generation_limits or {})
         self.chat = self.completions = self
         self.lock = threading.Lock()
 
@@ -76,11 +79,23 @@ class LocalCompletionClient:
                     content = blocks
                 converted.append({'role': role, 'content': content})
             generation = self.model.generate(converted, tools or [], max_tokens, 65536,
-                                             repetition_penalty=1.1)
+                                             repetition_penalty=1.1, **self.generation_limits)
+            if self.audit_path:
+                self.audit_path.parent.mkdir(parents=True, exist_ok=True)
+                with self.audit_path.open('a') as stream:
+                    stream.write(json.dumps({'model': self.path, 'max_tokens': max_tokens,
+                                             'generation_limits': self.generation_limits,
+                                             'message_count': len(converted),
+                                             'generation': generation}, ensure_ascii=False) + '\n')
             status = generation.get('status')
             if status not in {'ok', 'length'}:
                 raise RuntimeError('Local model generation failed: ' + str(status))
             text = generation.get('text') or ''
+            if status == 'length' and self.generation_limits:
+                # Upstream callers may ignore finish_reason. Keep raw evidence in
+                # the audit, but never expose a partial answer as a completed one.
+                text = ('GenerationIncomplete: ' + generation.get('stop_reason', 'budget') +
+                        '. No complete action accepted; the raw output is in the generation audit.')
             calls = []
             if status == 'ok':
                 try:

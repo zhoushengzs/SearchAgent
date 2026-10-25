@@ -130,7 +130,15 @@ class LocalModel:
             return {'text': '', 'status': 'context_limit', 'input_tokens': length, 'new_tokens': 0}
         inputs = inputs.to(self.device)
         options = {'do_sample': False}
+        guard_enabled = generation_kwargs.pop('repetition_guard', False)
+        guard = None
+        if guard_enabled:
+            from transformers import StoppingCriteriaList
+            from evaluation.generation_guard import stopping_guard
+            guard = stopping_guard(length)
+            options['stopping_criteria'] = StoppingCriteriaList([guard])
         options.update(generation_kwargs)
+        started = time.monotonic()
         with self.torch.inference_mode():
             result = self.model.generate(**inputs, max_new_tokens=max_tokens, use_cache=True, **options)
         generated = result[0, length:]
@@ -138,8 +146,15 @@ class LocalModel:
         eos = self.model.generation_config.eos_token_id
         eos_ids = {eos} if isinstance(eos, int) else set(eos or [])
         ended = len(generated) > 0 and generated[-1].item() in eos_ids
-        return {'text': text, 'status': 'ok' if ended or len(generated) < max_tokens else 'length',
-                'input_tokens': length, 'new_tokens': len(generated)}
+        elapsed = time.monotonic() - started
+        reason = ('repetition_guard' if guard is not None and guard.hit else 'eos' if ended
+                  else 'token_limit' if len(generated) >= max_tokens
+                  else 'time_limit' if options.get('max_time') is not None and elapsed >= options['max_time']
+                  else 'other_stop')
+        return {'text': text, 'status': 'ok' if ended else 'length',
+                'input_tokens': length, 'new_tokens': len(generated),
+                'stop_reason': reason, 'generation_seconds': elapsed,
+                **({'repetition_match': guard.hit} if guard is not None and guard.hit else {})}
 
     def generate_prefill(self, messages, max_tokens, context_tokens, prefix='<response>', **generation_kwargs):
         """Force an answer by opening the final assistant message with a response tag."""
@@ -154,7 +169,15 @@ class LocalModel:
             return {'text': '', 'status': 'context_limit', 'input_tokens': length, 'new_tokens': 0}
         inputs = inputs.to(self.device)
         options = {'do_sample': False}
+        guard_enabled = generation_kwargs.pop('repetition_guard', False)
+        guard = None
+        if guard_enabled:
+            from transformers import StoppingCriteriaList
+            from evaluation.generation_guard import stopping_guard
+            guard = stopping_guard(length)
+            options['stopping_criteria'] = StoppingCriteriaList([guard])
         options.update(generation_kwargs)
+        started = time.monotonic()
         with self.torch.inference_mode():
             result = self.model.generate(**inputs, max_new_tokens=max_tokens, use_cache=True, **options)
         generated = result[0, length:]
@@ -162,8 +185,15 @@ class LocalModel:
         eos = self.model.generation_config.eos_token_id
         eos_ids = {eos} if isinstance(eos, int) else set(eos or [])
         ended = len(generated) > 0 and generated[-1].item() in eos_ids
-        return {'text': text, 'status': 'ok' if ended or len(generated) < max_tokens else 'length',
-                'input_tokens': length, 'new_tokens': len(generated)}
+        elapsed = time.monotonic() - started
+        reason = ('repetition_guard' if guard is not None and guard.hit else 'eos' if ended
+                  else 'token_limit' if len(generated) >= max_tokens
+                  else 'time_limit' if options.get('max_time') is not None and elapsed >= options['max_time']
+                  else 'other_stop')
+        return {'text': text, 'status': 'ok' if ended else 'length',
+                'input_tokens': length, 'new_tokens': len(generated),
+                'stop_reason': reason, 'generation_seconds': elapsed,
+                **({'repetition_match': guard.hit} if guard is not None and guard.hit else {})}
 
 
 def tool_definitions():
@@ -270,8 +300,18 @@ def add_tool_error_feedback(tool_name, arguments, result, tools, turns):
                               'Do not retry the same PDF; use image_search or another acquired source.')
 
 
-def _generation(model, messages, schemas, a, repetition_penalty):
+def _generation_options(a, repetition_penalty):
     kwargs = {'repetition_penalty': repetition_penalty} if repetition_penalty and repetition_penalty != 1.0 else {}
+    if getattr(a, 'repetition_guard', False):
+        kwargs['repetition_guard'] = True
+    seconds = getattr(a, 'max_generation_seconds', None)
+    if seconds is not None:
+        kwargs['max_time'] = seconds
+    return kwargs
+
+
+def _generation(model, messages, schemas, a, repetition_penalty):
+    kwargs = _generation_options(a, repetition_penalty)
     try:
         return model.generate(messages, schemas, a.max_new_tokens, a.context_tokens, **kwargs)
     except TypeError:
@@ -279,7 +319,7 @@ def _generation(model, messages, schemas, a, repetition_penalty):
 
 
 def _forced_generation(model, messages, a, repetition_penalty):
-    kwargs = {'repetition_penalty': repetition_penalty} if repetition_penalty and repetition_penalty != 1.0 else {}
+    kwargs = _generation_options(a, repetition_penalty)
     if hasattr(model, 'generate_prefill'):
         try:
             generation = model.generate_prefill(messages, a.max_new_tokens, a.context_tokens, **kwargs)
@@ -298,7 +338,7 @@ def run_task(task, model, a, schemas, run_id):
     protocol = getattr(a, 'protocol', 'eval')
     repetition_penalty = float(getattr(a, 'repetition_penalty', 1.0) or 1.0)
     repeat_limit = int(getattr(a, 'repeat_limit', 0) or 0)
-    tool_summaries = getattr(a, 'tool_summaries', True)
+    tool_summaries = getattr(a, 'tool_summaries', False)
     tools = EvidenceTools(a.output / 'artifacts' / task['id'], image_side=a.image_side)
     start = time.monotonic()
     record = {'id': task['id'], 'input_fingerprint': task['input_fingerprint'],
@@ -391,19 +431,35 @@ def run_task(task, model, a, schemas, run_id):
                         if name not in allowed:
                             failure_status = 'unavailable_tool'
                             raise ValueError('Unknown or unavailable tool name: ' + name)
-                        validate_request({'tool': name.removeprefix('vs_'), 'arguments': args,
-                                          'rationale': 'Requested action', 'information_need': 'Evidence',
-                                          'gap_type': 'mixed', 'depends_on': []}, [])
+                        try:
+                            validate_request({'tool': name.removeprefix('vs_'), 'arguments': args,
+                                              'rationale': 'Requested action', 'information_need': 'Evidence',
+                                              'gap_type': 'mixed', 'depends_on': []}, [])
+                        except ValueError as exc:
+                            if name == 'vs_crop' and 'bbox' in str(exc):
+                                raise ValueError('vs_crop bbox must be [x1,y1,x2,y2] normalized to 0..1 '
+                                    'on the ORIGINAL image, not pixel coordinates. Require x1<x2 and y1<y2. '
+                                    'Full image is [0,0,1,1]; a top-left quarter is [0,0,0.5,0.5]. '
+                                    'Use vs_inspect_image to inspect the full image if a crop is unnecessary.') from exc
+                            raise
                     return action, value, turn
                 except (ValueError, TypeError, KeyError) as exc:
                     turn['validation_error'] = str(exc)
                     if attempt == VALIDATION_ATTEMPTS:
                         record.update(status=failure_status, error=str(exc), validation_exhausted=True)
                         return None
-                    feedback.append({'role': 'user', 'content':
+                    guard_feedback = ('Repeated generation was stopped. Do not restart the same passage. '
+                                      'Use a short explanation and one tool call, or submit a supported answer.\n'
+                                      if generation.get('stop_reason') == 'repetition_guard' else '')
+                    short_feedback = ('The final response exceeded its generation budget. Do not reproduce the '
+                        'long explanation, tables, item lists or calculations. Return only the requested final '
+                        'result(s) in at most two short sentences. If evidence is insufficient, say so briefly; '
+                        'do not invent missing facts, quantities or an optimal plan.\n'
+                        if forced and status == 'length' else '')
+                    feedback.append({'role': 'user', 'content': guard_feedback + short_feedback +
                         'Output validation failed; no tool was executed for this proposal. '
                         'Correct the format/name/arguments using only the existing evidence. '
-                        'For an answer, preserve its content and put explanations inside one <response>...</response> block. '
+                        'For an answer, preserve the final answer values and use one <response>...</response> block. '
                         'Do not invent evidence. Available tool names: ' + ', '.join(sorted(allowed)) + '.\n' +
                         json.dumps({'error': str(exc), 'rejected_output': text[:4000]}, ensure_ascii=False)})
             return None
@@ -547,8 +603,8 @@ def main():
     p.add_argument('--tasks', type=Path, default=ROOT / 'outputs/local_benchmark_eval/data/pilot_tasks.jsonl')
     p.add_argument('--output', required=True, type=Path)
     p.add_argument('--mode', choices=['agent', 'direct'], default='agent')
-    p.add_argument('--tool-summaries', action=argparse.BooleanOptionalAction, default=True,
-                   help='Use the tested model to summarize each executed tool result')
+    p.add_argument('--tool-summaries', action=argparse.BooleanOptionalAction, default=False,
+                   help='Legacy opt-in observer experiment; disabled by default. Read raw tool results directly.')
     p.add_argument('--device', choices=['auto', 'mps', 'cuda', 'cpu'], default='auto')
     p.add_argument('--dtype', choices=['bfloat16', 'float16', 'float32'], default='bfloat16')
     p.add_argument('--max-steps', type=int, default=10)
@@ -558,6 +614,10 @@ def main():
                    help='Decoding repetition penalty applied to both Base and SFT (1.0 disables it)')
     p.add_argument('--repeat-limit', type=int, default=2,
                    help='Force a final answer after this many duplicate tool calls; 0 disables the guard')
+    p.add_argument('--repetition-guard', action='store_true',
+                   help='Opt in to stopping long exact token phrases repeated three times')
+    p.add_argument('--max-generation-seconds', type=float,
+                   help='Optional soft per-call model generation time budget, excluding input preparation')
     p.add_argument('--max-new-tokens', type=int, default=4096)
     p.add_argument('--context-tokens', type=int, default=32768)
     p.add_argument('--max-pixels', type=int, default=262144)
@@ -572,6 +632,8 @@ def main():
     p.add_argument('--allow-download', action='store_true')
     p.add_argument('--retry-infrastructure-errors', action='store_true')
     a = p.parse_args()
+    if a.max_generation_seconds is not None and a.max_generation_seconds <= 0:
+        p.error('max-generation-seconds must be positive')
     if a.max_steps < 1 or a.max_new_tokens < 1 or a.context_tokens <= a.max_new_tokens or (a.limit is not None and a.limit < 1) or a.image_side not in range(64, 2049) or a.max_pixels < 1:
         p.error('Invalid step/token/task limits')
     if not 0.9 <= a.repetition_penalty <= 2.0 or a.repeat_limit < 0:
@@ -613,11 +675,14 @@ def main():
                 'system': training_system() if a.protocol == 'training' else SYSTEM, 'tools': schemas,
                 'protocol': a.protocol, 'repetition_penalty': a.repetition_penalty,
                 'repeat_limit': a.repeat_limit, 'validation_attempts': VALIDATION_ATTEMPTS,
+                'repetition_guard': a.repetition_guard,
+                'max_generation_seconds': a.max_generation_seconds,
                 'execution_policy': execution_policy(a.tool_summaries),
                 'tasks_sha256': digest(a.tasks), 'selected_ids': [t['id'] for t in tasks],
                 **{k: getattr(a, k) for k in ['dtype', 'max_steps', 'max_new_tokens', 'context_tokens', 'max_pixels', 'image_side']},
                 'code_sha256': {str(f.relative_to(ROOT)): digest(f) for f in sorted({
                     Path(__file__), ROOT / 'evaluation/common.py', ROOT / 'evaluation/protocol.py', ROOT / 'evaluation/execution.py',
+                    ROOT / 'evaluation/generation_guard.py',
                     ROOT / 'evaluation/training_protocol/tools.json', ROOT / 'evaluation/training_protocol/system.txt',
                     ROOT / 'trajectory_sources.json',
                     ROOT / 'sources/registry.py', ROOT / 'sources/download.py',

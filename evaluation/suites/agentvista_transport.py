@@ -16,8 +16,15 @@ original_request = api_caller._make_api_request
 if os.environ.get('EVAL_LOCAL_MODEL'):
     import requests
     from evaluation.local_api import LocalCompletionClient
+    limits = {}
+    if os.environ.get('EVAL_REPETITION_GUARD') == '1':
+        limits['repetition_guard'] = True
+    if os.environ.get('EVAL_GENERATION_SECONDS'):
+        limits['max_time'] = float(os.environ['EVAL_GENERATION_SECONDS'])
     local = LocalCompletionClient(os.environ['EVAL_LOCAL_MODEL'],
-                                  device=os.environ.get('EVAL_LOCAL_DEVICE', 'mps'), answer_tag='answer')
+                                  device=os.environ.get('EVAL_LOCAL_DEVICE', 'mps'), answer_tag='answer',
+                                  audit_path=os.environ.get('EVAL_GENERATION_AUDIT'),
+                                  generation_limits=limits)
     def original_request(end_point, headers, payload, api_name='API'):
         body = local.create(**payload).model_dump(exclude_none=True)
         response = requests.Response()

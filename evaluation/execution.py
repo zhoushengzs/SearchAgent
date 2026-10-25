@@ -17,12 +17,13 @@ OBSERVER_SYSTEM = ('You are the visual observer. Summarize only supplied evidenc
                    'Return the requested JSON object. Do not call tools or give a final benchmark answer.')
 
 
-def execution_policy(tool_summaries=True):
-    return {'tool_summaries': tool_summaries, 'observer': 'same_tested_model',
-            'observer_attempts': OBSERVER_ATTEMPTS, 'tool_network_attempts': TOOL_NETWORK_ATTEMPTS,
+def execution_policy(tool_summaries=False):
+    return {'tool_summaries': tool_summaries, 'observer': 'same_tested_model' if tool_summaries else None,
+            'observer_attempts': OBSERVER_ATTEMPTS if tool_summaries else 0,
+            'tool_network_attempts': TOOL_NETWORK_ATTEMPTS,
             'answer_policy': 'tagged_content_or_plain_text_on_final_request',
             'validation_exhaustion': 'request_final_answer_with_three_attempts',
-            'observer_failure': 'retain_raw_result_and_record_failure'}
+            'observer_failure': 'retain_raw_result_and_record_failure' if tool_summaries else None}
 
 
 def final_content(text, *, allow_plain=False):

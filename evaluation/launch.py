@@ -29,7 +29,11 @@ def worker_commands(a):
               '--env-file', str(a.env_file.resolve())]
     for name in ['mode', 'protocol', 'dtype', 'max_steps', 'max_new_tokens', 'context_tokens', 'max_pixels', 'image_side', 'repetition_penalty', 'repeat_limit']:
         common += ['--' + name.replace('_', '-'), str(getattr(a, name))]
-    common.append('--tool-summaries' if getattr(a, 'tool_summaries', True) else '--no-tool-summaries')
+    common.append('--tool-summaries' if getattr(a, 'tool_summaries', False) else '--no-tool-summaries')
+    if getattr(a, 'repetition_guard', False):
+        common.append('--repetition-guard')
+    if getattr(a, 'max_generation_seconds', None) is not None:
+        common += ['--max-generation-seconds', str(a.max_generation_seconds)]
     for name in ['limit', 'image_root', 'original_root']:
         if getattr(a, name) is not None:
             value = getattr(a, name)
@@ -98,12 +102,15 @@ def main():
     p.add_argument('--gpus', default=os.environ.get('CUDA_VISIBLE_DEVICES') or '0,1,2,3,4,5,6,7')
     p.add_argument('--expected-count', type=int, help='Optional extra count check; portable bundles declare their full count')
     p.add_argument('--mode', choices=['agent', 'direct'], default='agent')
-    p.add_argument('--tool-summaries', action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument('--tool-summaries', action=argparse.BooleanOptionalAction, default=False,
+                   help='Legacy observer experiment; disabled by default for all GPU workers')
     p.add_argument('--dtype', choices=['bfloat16', 'float16', 'float32'], default='bfloat16')
     p.add_argument('--max-steps', type=int, default=10)
     p.add_argument('--protocol', choices=['eval', 'training'], default='training')
     p.add_argument('--repetition-penalty', type=float, default=1.0)
     p.add_argument('--repeat-limit', type=int, default=2)
+    p.add_argument('--repetition-guard', action='store_true')
+    p.add_argument('--max-generation-seconds', type=float)
     p.add_argument('--max-new-tokens', type=int, default=4096)
     p.add_argument('--context-tokens', type=int, default=32768)
     p.add_argument('--max-pixels', type=int, default=262144)
@@ -116,6 +123,8 @@ def main():
     p.add_argument('--allow-download', action='store_true')
     p.add_argument('--dry-run', action='store_true', help='Print assignments and commands without loading models')
     a = p.parse_args()
+    if a.max_generation_seconds is not None and a.max_generation_seconds <= 0:
+        p.error('max-generation-seconds must be positive')
     if (a.expected_count is not None and a.expected_count < 1) or (a.limit is not None and a.limit < 1) or a.max_steps < 1 or a.max_new_tokens < 1 or a.context_tokens <= a.max_new_tokens or not 64 <= a.image_side <= 2048 or a.max_pixels < 1:
         p.error('Invalid task count or model budget')
     if not 0.9 <= a.repetition_penalty <= 2.0 or a.repeat_limit < 0:

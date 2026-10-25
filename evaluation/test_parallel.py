@@ -189,7 +189,8 @@ class EvaluationRecoveryTests(unittest.TestCase):
                 else:
                     feedback = messages[-1]['content']
                     assert 'no tool was executed' in feedback
-                    assert 'Crop needs a valid source-coordinate bbox' in feedback
+                    assert 'normalized to 0..1' in feedback
+                    assert '[0,0,1,1]' in feedback
                     text = '<response>uncertain</response>'
                 return {'text': text, 'status': 'ok'}
         with tempfile.TemporaryDirectory() as folder:

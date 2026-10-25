@@ -82,9 +82,20 @@ def main():
     p.add_argument('--search-key-env', default='SERPER_API_KEY', help='Environment variable containing a usable Serper key')
     p.add_argument('--check-only', action='store_true')
     p.add_argument('--inference-only',action='store_true',help='Run the official agent without requesting grades')
+    p.add_argument('--max-turns', type=int, default=30)
+    p.add_argument('--max-completion-tokens', type=int, default=8192)
+    p.add_argument('--max-pixels', type=int, default=2000000)
+    p.add_argument('--repetition-guard', action='store_true', help='Local inference only; changes the official-default protocol')
+    p.add_argument('--max-generation-seconds', type=float, help='Local inference only; soft generation time limit')
     args = p.parse_args()
     if args.limit < 1:
         p.error('--limit must be positive')
+    if min(args.max_turns, args.max_completion_tokens, args.max_pixels) < 1:
+        p.error('Inference budgets must be positive')
+    if args.max_generation_seconds is not None and args.max_generation_seconds <= 0:
+        p.error('max-generation-seconds must be positive')
+    if (args.repetition_guard or args.max_generation_seconds is not None) and not os.environ.get('EVAL_LOCAL_MODEL'):
+        p.error('Repetition/time guards require EVAL_LOCAL_MODEL; remote APIs cannot enforce this local stopping rule')
     repo = BASE / 'AgentVista'
     sha = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
     tasks_file = args.tasks.resolve()
@@ -107,8 +118,15 @@ def main():
                 'tasks_sha256': hashlib.sha256(tasks_file.read_bytes()).hexdigest(),
                 'references_sha256':hashlib.sha256(reference_file.read_bytes()).hexdigest(),
                 'inference_only':args.inference_only,
-                'max_turns': 30, 'max_images': 100, 'max_total_tokens': 65536,
-                'max_completion_tokens': 8192, 'max_pixels': 2000000,
+                'local_adapter_sha256': {str(f.relative_to(ROOT)): hashlib.sha256(f.read_bytes()).hexdigest()
+                    for f in [ROOT/'evaluation/run.py', ROOT/'evaluation/local_api.py',
+                              ROOT/'evaluation/generation_guard.py', HERE/'agentvista_transport.py']},
+                'max_turns': args.max_turns, 'max_images': 100, 'max_total_tokens': 65536,
+                'max_completion_tokens': args.max_completion_tokens, 'max_pixels': args.max_pixels,
+                'repetition_guard': args.repetition_guard, 'max_generation_seconds': args.max_generation_seconds,
+                'protocol_variant': 'official_agent_with_project_generation_limits' if (
+                    args.max_turns != 30 or args.max_completion_tokens != 8192 or args.max_pixels != 2000000
+                    or args.repetition_guard or args.max_generation_seconds is not None) else 'official_default_budgets',
                 'scope': 'fixed project holdout subset, not the official full-dataset score',
                 'local_model': os.environ.get('EVAL_LOCAL_MODEL'),
                 'dependencies': 'minimal inference dependencies on macOS; not the complete pinned CUDA training environment',
@@ -156,10 +174,15 @@ def main():
         if not audit['ready']:
             raise SystemExit('Official judge preflight failed. No inference started; do not report default-zero official scores.')
     env['AGENTVISTA_TRANSPORT_AUDIT'] = str(args.output/'model_http.jsonl')
+    env['EVAL_GENERATION_AUDIT'] = str(args.output/'raw_generations.jsonl')
+    env.pop('EVAL_REPETITION_GUARD', None)
+    env.pop('EVAL_GENERATION_SECONDS', None)
+    if args.repetition_guard: env['EVAL_REPETITION_GUARD'] = '1'
+    if args.max_generation_seconds is not None: env['EVAL_GENERATION_SECONDS'] = str(args.max_generation_seconds)
     command = [sys.executable, str(HERE / 'agentvista_transport.py'), '--input-file', str(data),
-               '--image-folder', '/', '--output-dir', str(args.output / 'run'), '--max-turns', '30',
-               '--max-images', '100', '--max-total-tokens', '65536', '--max-completion-tokens', '8192',
-               '--max-pixels', '2000000', '--skip-completed']
+               '--image-folder', '/', '--output-dir', str(args.output / 'run'), '--max-turns', str(args.max_turns),
+               '--max-images', '100', '--max-total-tokens', '65536', '--max-completion-tokens', str(args.max_completion_tokens),
+               '--max-pixels', str(args.max_pixels), '--skip-completed']
     with (args.output / 'run.log').open('a') as log:
         result = subprocess.run(command, cwd=repo, env=env, stdout=log, stderr=subprocess.STDOUT)
     failed_ids = merge_saved_answers(args.output,previous,manifest['selected_ids'])

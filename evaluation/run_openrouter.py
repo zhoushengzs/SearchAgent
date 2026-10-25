@@ -27,7 +27,8 @@ def parser():
     p.add_argument('--workers', type=int, default=16)
     p.add_argument('--provider', help='Optional exact OpenRouter provider slug; fixes routing via provider.only')
     p.add_argument('--mode', choices=['agent', 'direct'], default='agent')
-    p.add_argument('--tool-summaries', action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument('--tool-summaries', action=argparse.BooleanOptionalAction, default=False,
+                   help='Legacy observer experiment; disabled by default for both Base and SFT')
     p.add_argument('--max-steps', type=int, default=10)
     p.add_argument('--protocol', choices=['eval', 'training'], default='training')
     p.add_argument('--repetition-penalty', type=float, default=1.0)
