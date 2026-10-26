@@ -1,0 +1,17 @@
+# Local datasets, secrets, tasks, and generated reports
+.codex/
+**/__pycache__/
+*.pyc
+**/config.json
+**/*.local.json
+**/jobs/
+**/cases/
+**/runs/
+**/*.jsonl
+**/*.sqlite*
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.webp
+.env
+.env.*

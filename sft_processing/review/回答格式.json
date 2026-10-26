@@ -1,0 +1,38 @@
+{
+  "case_id": "保持输入值",
+  "case_status": "needs_more_evidence",
+  "pair_reviews": [
+    {
+      "anchor_step": 1,
+      "later_step": 2,
+      "verdict": "needs_more_evidence",
+      "differences": [
+        {
+          "location": "history[...].result...",
+          "before": "最短必要摘录",
+          "after": "最短必要摘录",
+          "kind": "unique_evidence | grounded_new_judgment | timing_only | semantic_only | uncertain",
+          "reason": "依据"
+        }
+      ],
+      "image_evidence_sufficient": false,
+      "unique_content": [],
+      "reference_mapping_proposal": [],
+      "preserve_judgment_at_or_after_step": null,
+      "missing_evidence": [],
+      "reason": "简短依据"
+    }
+  ],
+  "reference_reviews": [
+    {
+      "location": "实际位置",
+      "original_text": "原句",
+      "meaning": "agent_action | domain_instruction | uncertain",
+      "proposed_target_step": null,
+      "may_rewrite_generated_text": false,
+      "reason": "具体依据"
+    }
+  ],
+  "remaining_issues": [],
+  "may_modify_dataset_now": false
+}
