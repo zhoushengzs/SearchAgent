@@ -1,0 +1,15 @@
+# Install inside a Conda environment with a suitable PyTorch build first.
+-r requirements-openrouter.txt
+openai>=1.0.0
+accelerate>=1.0
+jsonschema>=4.0
+playwright
+PyMuPDF
+opencv-python-headless
+yt-dlp
+qwen-vl-utils
+trafilatura
+tiktoken
+PyYAML
+jupyter-client
+ipykernel

@@ -1,0 +1,26 @@
+{
+  "source_train": "/Users/ss/Downloads/OpenSearch-VL-SFT-Agent-NoImages/train.jsonl",
+  "media_dir": "/Users/ss/Downloads/OpenSearch-VL-SFT-Agent-NoImages",
+  "existing_teacher_script": "/Users/ss/代码and Paper/paper/visual-search-agent/VS_Captioning new/sft_processing/teacher/teacher_stage2.py",
+  "cleaner_script": "/Users/ss/Downloads/OpenSearch-VL-SFT-Agent-NoImages/.codex/sft_cleaning_20261025/clean_sft.py",
+  "jobs_file": "/Users/ss/代码and Paper/paper/visual-search-agent/VS_Captioning new/.codex/teacher_simulation_20261026/jobs/pilot20.jsonl",
+  "runs_dir": "/Users/ss/Downloads/OpenSearch-VL-SFT-Agent-NoImages/teacher_simulation_runs_20261026",
+  "prompts_dir": "/Users/ss/代码and Paper/paper/visual-search-agent/VS_Captioning new/sft_processing/teacher_simulation/prompts",
+  "teacher_model": "",
+  "reviewer_model": "",
+  "answer_source_types": [
+    "reviewed_repaired_teacher_decision",
+    "reviewed_original_teacher_decision"
+  ],
+  "min_source_actions": 3,
+  "max_source_actions": 16,
+  "max_simulated_actions": 12,
+  "max_context_characters": 220000,
+  "max_images": 12,
+  "max_single_image_bytes": 15000000,
+  "max_total_image_bytes": 35000000,
+  "max_output_tokens": 12000,
+  "temperature": 0.3,
+  "timeout_seconds": 240,
+  "http_retries": 2
+}

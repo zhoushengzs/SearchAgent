@@ -1,0 +1,22 @@
+{
+  "cleaned_dir": "SET_BY_CONFIGURE",
+  "media_dir": "SET_BY_CONFIGURE",
+  "cleaner_script": "SET_BY_CONFIGURE",
+  "jobs_file": "SET_BY_CONFIGURE",
+  "runs_dir": "SET_BY_CONFIGURE",
+  "teacher_model": "",
+  "reviewer_model": "",
+  "response_format": "json_object",
+  "temperature": 0.2,
+  "max_output_tokens": 6000,
+  "timeout_seconds": 180,
+  "http_retries": 2,
+  "max_images": 12,
+  "max_single_image_bytes": 15000000,
+  "max_total_image_bytes": 35000000,
+  "max_context_characters": 180000,
+  "recovery_fraction": 0.6,
+  "numbering_version": "v2_contiguous",
+  "recovery_source": "SET_BY_CONFIGURE",
+  "recovery_manifest": "SET_BY_CONFIGURE"
+}

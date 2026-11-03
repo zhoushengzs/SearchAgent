@@ -1,0 +1,9 @@
+# Core
+datasets>=2.14.0
+huggingface-hub>=0.20.0
+Pillow>=9.1.0
+
+# DashScope / OpenRouter APIs (both OpenAI-compatible; see labeling/client.py).
+openai>=1.0.0
+requests>=2.32.2
+cryptography>=3.4.8

@@ -1,0 +1,283 @@
+{
+  "schema": "visual-trajectory-source-catalog-v1",
+  "checked_on": "2026-10-01",
+  "purpose": "Pinned source catalog and integration status. Only implemented adapters are CLI keys. Questions are seeds; official environment parity is not claimed.",
+  "sources": [
+    {
+      "key": "agentvista",
+      "name": "AgentVista",
+      "tier": "core",
+      "hf_id": "Warrieryes/AgentVista",
+      "revision": "61de767ad8c72e258ac71a0aef952b89ca920a16",
+      "split": "train",
+      "question_count": 209,
+      "count_basis": "Official repository and HF rows",
+      "official_url": "https://github.com/hkust-nlp/AgentVista",
+      "behaviors": [
+        "visual_language_search",
+        "planning",
+        "code_use",
+        "cross_source_verification"
+      ],
+      "adapter_status": "implemented",
+      "execution_status": "local_adapted_runner",
+      "hidden_reference_fields": [
+        "answer"
+      ],
+      "notes": "All ordered initial images are preserved. Adapted retrieval/image tools are implemented; arbitrary code and reverse-image search are absent, so this is not the full official environment.",
+      "live_sample_check": {
+        "checked_on": "2026-10-01",
+        "raw": 2,
+        "valid": 2,
+        "skipped": 0
+      }
+    },
+    {
+      "key": "mmsearch_plus",
+      "name": "MMSearch-Plus",
+      "tier": "core",
+      "hf_id": "Cie1/MMSearch-Plus",
+      "revision": "161a60d469b67cd14a0621ae2ab66d902df02df9",
+      "split": "train",
+      "question_count": 311,
+      "count_basis": "HF pinned release",
+      "license_declared": "cc-by-4.0",
+      "official_url": "https://mmsearch-plus.github.io/",
+      "behaviors": [
+        "fine_visual_cues",
+        "iterative_retrieval",
+        "conflict_resolution",
+        "source_provenance"
+      ],
+      "adapter_status": "implemented",
+      "execution_status": "local_adapted_runner",
+      "hidden_reference_fields": [
+        "answer",
+        "arxiv_id",
+        "video_url"
+      ],
+      "notes": "Public canary decoding; every initial image and accepted answer alternative preserved. Source IDs/URLs stay in references. Adapted retrieval runner implemented.",
+      "live_sample_check": {
+        "checked_on": "2026-10-01",
+        "raw": 2,
+        "valid": 2,
+        "skipped": 0
+      }
+    },
+    {
+      "key": "mmbrowsecomp",
+      "name": "MM-BrowseComp",
+      "tier": "core",
+      "hf_id": "mmbrowsecomp/MMBrowseComp",
+      "revision": "cf82a2390aa7a7ed3d96f72969d22548eff3e101",
+      "split": "release-400",
+      "question_count": 400,
+      "count_basis": "Counted official data/MMBrowseComp_400.jsonl",
+      "official_url": "https://github.com/MMBrowseComp/MM-BrowseComp",
+      "official_revision": "cf82a2390aa7a7ed3d96f72969d22548eff3e101",
+      "official_file": "data/MMBrowseComp_400.jsonl",
+      "hf_question_count": 224,
+      "license_declared": "HF card: mit; expanded GitHub release terms not independently established",
+      "behaviors": [
+        "multihop_browsing",
+        "retrieved_visual_evidence",
+        "cross_modal_verification"
+      ],
+      "adapter_status": "implemented",
+      "execution_status": "local_adapted_runner",
+      "hidden_reference_fields": [
+        "answer",
+        "checklist",
+        "checklist_property",
+        "source",
+        "canary"
+      ],
+      "notes": "Uses the pinned 400-row GitHub release, not the older HF snapshot. Public canary decoding; zero/one/multiple initial images allowed. Checklists and source annotations are evaluator-only. Do not publish decrypted questions/answers. Video tools are absent.",
+      "hf_revision": "525aa13a944fbbcbdfa4998a5c894255a43fa485",
+      "live_sample_check": {
+        "checked_on": "2026-10-01",
+        "raw": 2,
+        "valid": 2,
+        "skipped": 0
+      }
+    },
+    {
+      "key": "browsecomp_v3",
+      "name": "BrowseComp-V3",
+      "tier": "core",
+      "hf_id": "Halcyon-Zhang/BrowseComp-V3",
+      "revision": "a84d446b6dfa4db7c6d06ac17c9155aba8db9906",
+      "split": "train",
+      "question_count": 300,
+      "count_basis": "Official README",
+      "license_declared": "cc-by-4.0 (author README)",
+      "official_url": "https://github.com/Halcyon-Zhang/BrowseComp-V3",
+      "behaviors": [
+        "deep_multihop_search",
+        "visual_language_linking",
+        "subgoal_verification"
+      ],
+      "adapter_status": "implemented",
+      "execution_status": "local_adapted_runner",
+      "hidden_reference_fields": [
+        "answer",
+        "trajectory",
+        "subgoals",
+        "metadata reference annotations"
+      ],
+      "notes": "Public passphrase AES-GCM decoding with authentication. Initial image paths/order validated. Nested metadata trajectory and sub_goals stay entirely in detached references. Adapted tool subset differs from OmniSeeker.",
+      "live_sample_check": {
+        "checked_on": "2026-10-01",
+        "raw": 2,
+        "valid": 2,
+        "skipped": 0
+      }
+    },
+    {
+      "key": "dynvqa",
+      "name": "Dyn-VQA",
+      "tier": "core_filtered",
+      "hf_id": null,
+      "repository": "Alibaba-NLP/OmniSearch",
+      "revision": "b01e78edb694fa0e8b05b808d2722d046f3f204b",
+      "split": "English-202502",
+      "data_file": "dataset/DynVQA_en/DynVQA_en.202502.jsonl",
+      "question_count": 706,
+      "count_basis": "Counted pinned public JSONL, not all snapshots/languages",
+      "official_url": "https://github.com/Alibaba-NLP/OmniSearch",
+      "behaviors": [
+        "adaptive_retrieval",
+        "dynamic_knowledge",
+        "multihop_search",
+        "presupposition_checking"
+      ],
+      "adapter_status": "implemented",
+      "execution_status": "local_assets_required",
+      "hidden_reference_fields": [
+        "answer",
+        "golden_query"
+      ],
+      "notes": "Pinned English 202502 author JSONL. golden_query stays detached. Local author assets adapter verified; first two remote image URLs return 403, older snapshots use the same service. HF mirror contains older metadata only, not replacement images. Audit dynamic reference staleness.",
+      "live_access_status": "First two official image URLs returned HTTP 403; older snapshots use the same image service.",
+      "hf_mirror": "zhzhen23/DynVQA",
+      "hf_mirror_revision": "c6e27c84fb4a62a98c9418c820ea742079b9fbb4",
+      "local_asset_test": "passed"
+    },
+    {
+      "key": "m3vqa",
+      "name": "M3-VQA",
+      "aliases": [
+        "m3_vqa"
+      ],
+      "tier": "core_filtered",
+      "hf_id": "CASIA-IVA-Lab/M3VQA",
+      "revision": "0e39410f3058b7497c22fe4ca4b7cba23143c8ac",
+      "split": "test",
+      "question_count": 13125,
+      "count_basis": "HF datasets-server size API",
+      "license_declared": "mit",
+      "official_url": "https://github.com/CASIA-IVA-Lab/M3VQA",
+      "paper_url": "https://arxiv.org/abs/2604.25122",
+      "behaviors": [
+        "multi_entity_grounding",
+        "sequential_multihop",
+        "parallel_multihop",
+        "evidence_aggregation"
+      ],
+      "adapter_status": "implemented",
+      "execution_status": "local_adapted_runner",
+      "hidden_reference_fields": [
+        "answers",
+        "answer_evals",
+        "img_entity_names",
+        "evidence",
+        "evidence_urls",
+        "evidence_img_ids",
+        "evidence_section_ids",
+        "evidence_section_titles",
+        "evidence_url_titles"
+      ],
+      "notes": "Pinned quesions.jsonl plus explicit images.zip member resolution using bounded HTTP ranges or local assets. Keep ALL required answers and grouped alternatives. Gold entity names/evidence stay detached. Full independent JSONL KB retrieval is implemented; author-KB conversion is not. Open-web runs are an adapted protocol. Select higher-hop/multi-entity cases.",
+      "live_sample_check": {
+        "checked_on": "2026-10-01",
+        "raw": 2,
+        "valid": 2,
+        "skipped": 0
+      }
+    },
+    {
+      "key": "visualtoolbench",
+      "name": "VisualToolBench",
+      "aliases": [
+        "vistoolbench"
+      ],
+      "tier": "behavior_extension",
+      "hf_id": "ScaleAI/VisualToolBench",
+      "revision": "28de4fbd42a69fa86878f0d9f17b2e991d17fd5c",
+      "split": "test",
+      "question_count": 1204,
+      "count_basis": "Author HF card: 603 single-turn, 601 multi-turn",
+      "license_declared": null,
+      "official_url": "https://huggingface.co/datasets/ScaleAI/VisualToolBench",
+      "behaviors": [
+        "image_operations",
+        "multi_turn_memory",
+        "tool_selection"
+      ],
+      "adapter_status": "planned",
+      "execution_status": "multi_turn_tool_executor_required",
+      "hidden_reference_fields": [
+        "turn_golden_answers",
+        "turn_tool_trajectories",
+        "rubrics_by_turn"
+      ],
+      "notes": "Schedule questions/images by turn; never reveal future-turn inputs early. Reference tool trajectories are not execution logs. HF card currently has no license declaration. 7.81 GB parquet; no bulk download performed."
+    },
+    {
+      "key": "tirbench",
+      "name": "TIR-Bench",
+      "aliases": [
+        "tir_bench"
+      ],
+      "tier": "behavior_extension",
+      "hf_id": "Agents-X/TIR-Bench",
+      "revision": "ae9976e81e86c4797fd0d28f9119393b37d9d006",
+      "split": "test",
+      "question_count": 1215,
+      "count_basis": "Counted pinned public TIR-Bench.json",
+      "license_declared": "apache-2.0",
+      "official_url": "https://github.com/agents-x-project/TIR-Bench",
+      "behaviors": [
+        "tool_integrated_visual_reasoning",
+        "programmatic_image_analysis",
+        "spatial_measurement"
+      ],
+      "adapter_status": "implemented",
+      "execution_status": "local_adapted_runner",
+      "hidden_reference_fields": [
+        "answer",
+        "meta_data reference annotations"
+      ],
+      "notes": "Both image slots preserved; pinned task JSON and data.zip members supported. Static task adaptation uses inspection/crop/arithmetic; complete official tool coverage for all 13 types is not claimed. Useful perception supplement, not uniformly long-horizon.",
+      "live_sample_check": {
+        "checked_on": "2026-10-01",
+        "raw": 2,
+        "valid": 2,
+        "skipped": 0
+      }
+    }
+  ],
+  "working_batch": [
+    "agentvista",
+    "mmsearch_plus",
+    "mmbrowsecomp",
+    "browsecomp_v3",
+    "m3vqa",
+    "tirbench"
+  ],
+  "execution_protocols": [
+    "adapted_open_web_v1",
+    "adapted_local_kb_v1",
+    "adapted_inspection_only_v1"
+  ]
+}

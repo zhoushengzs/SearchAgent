@@ -1,0 +1,4 @@
+-r ../requirements.txt
+# Tokenizer/chat-template accounting only: no local model weights or CUDA needed.
+transformers==5.6.0
+Pillow==11.3.0
