@@ -2,7 +2,7 @@
 .hf_cache/
 __pycache__/
 *.pyc
-data/
+/data/
 .env.local
 .DS_Store
 .env copy

@@ -8,6 +8,12 @@
 
 统一操作入口现已提供：`python -m workflows --help`。按采集轨迹、SFT数据处理、GRPO强化学习、评测分类；完整阶段顺序、每部分输入输出和使用方法见[工作流程说明](workflows/README.md)。SFT模型训练单独说明，避免与数据清洗混淆。
 
+## InternVL3-14B 原始 SFT 数据试跑
+
+完整命令见 [InternVL3-14B 试跑说明](training_examples/internvl3_14b/README.md)。本仓库已补齐 SFT 数据处理源码，示例包括工具格式适配、固定依赖、3步 LoRA 试跑和保存后重载检查。**已通过 CPU 数据处理检查，尚未完成 GPU 训练验证；不要直接作为完整训练成功配方。**
+
+原始训练数据和图片位于 [Hugging Face 数据集](https://huggingface.co/datasets/zhoushengzs/OpenSearch-VL-SFT-Original)。其中原 configs/full.json、lora.json 仍是 Qwen 示例，InternVL 请使用上述独立入口。
+
 ## 1. 目录是什么
 
 | 目录或文件 | 用途 | 什么时候使用 |
