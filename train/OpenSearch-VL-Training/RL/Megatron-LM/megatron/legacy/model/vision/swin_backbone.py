@@ -583,7 +583,7 @@ class SwinTransformer(nn.Module):
             if i != len(self.layers) - 1 or not self.output_avg:
                 px = px.permute(0, 2, 1).contiguous()
                 px = px.reshape(b, c, h, w)
-            # is this a fair assumption ?? i think it's baked into the architecture
+            # Track the next stage at half the spatial resolution.
             h, w = h//2, w//2
             outs.append(px)
 

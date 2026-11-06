@@ -28,10 +28,7 @@ def modify_logits_for_top_p_filtering(logits, top_p):
 
     # Filteration based on the cumulative sum.
     filter_ = cumulative_probs > top_p
-    # This shift by 1 is weird and I cannot justify it. This existed
-    # in the original implementation:
-    #   https://github.com/ari-holtzman/degen/blob/master/gen.py
-    # and I guess it is needed so keeping it for now.
+    # Keep the first token that crosses the top-p threshold.
     filter_[:, 1:] = filter_[:, :-1].clone()
     # Make sure we at least have one token to select from.
     filter_[..., 0] = 0

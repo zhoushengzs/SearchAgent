@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from evaluation.common import load_tasks, read_predictions, shard_tasks, write_json_atomic
-from evaluation.prepare import digest, dump, write_rows
+from evaluation.prepare import digest, write_rows
 from evaluation.run import fingerprint
 
 

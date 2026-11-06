@@ -53,7 +53,7 @@ def answers_match(predicted: str, target: str) -> bool:
 
 
 def check_necessity(record, client):
-    """A paired restricted-view probe, not proof of the original policy's causality."""
+    """Measure answer sensitivity with paired restricted-view probes."""
     trace = record["annotation"]["search_trace"]
     recovery = next((s for s in trace if s["action"] == "recover"), None)
     if recovery is None:

@@ -1,4 +1,4 @@
-"""One fresh four-way experiment: shared inference assets, native agent and budgets."""
+"""Run four conditions with shared inference assets, native agent and budgets."""
 import argparse
 import asyncio
 import hashlib

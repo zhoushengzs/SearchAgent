@@ -169,7 +169,7 @@ class MessageQueue:
                 sample = list(self.queue)[0]
                 try:
                     sample_size = sys.getsizeof(sample)
-                    # Since we now store RolloutSample directly, estimate based on its components
+                    # Estimate memory from the RolloutSample components.
                     if hasattr(sample, "original_batch_dict") and sample.original_batch_dict:
                         # Estimate batch data size
                         batch_data = sample.original_batch_dict.get("batch", {})

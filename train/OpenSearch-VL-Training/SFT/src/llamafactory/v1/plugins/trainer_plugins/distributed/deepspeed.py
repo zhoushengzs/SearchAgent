@@ -35,8 +35,7 @@ logger = get_logger(__name__)
 class DeepSpeedEngine:
     """DeepSpeed integration using accelerate's built-in capabilities.
 
-    This replaces the manual DeepSpeedConfigHelper / DeepSpeedEngine approach
-    with accelerate's Accelerator + DeepSpeedPlugin, which handles:
+    Accelerator and DeepSpeedPlugin handle:
     - Config syncing (auto values, batch size, lr, etc.)
     - deepspeed.initialize() call
     - Optimizer / LR scheduler wrapping

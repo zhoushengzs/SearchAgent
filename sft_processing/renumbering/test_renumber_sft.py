@@ -1,10 +1,5 @@
-import copy
-import io
 import json
-import tempfile
 import unittest
-from contextlib import redirect_stdout
-from pathlib import Path
 import renumber_sft as r
 
 def sample(ids=(1,3,4),target=6,refs=(3,4),reason='Use the observations.',tid='T'):

@@ -94,6 +94,7 @@ class AsyncLLMServerManager:
         prompt_ids: list[int],
         sampling_params: dict[str, Any],
         image_data: Optional[list[Any]] = None,
+        routing_key: Optional[str] = None,
     ) -> TokenOutput:
         """Generate tokens from prompt ids.
 
@@ -101,11 +102,12 @@ class AsyncLLMServerManager:
             request_id (str): request id for sticky session.
             prompt_ids (List[int]): List of prompt token ids.
             sampling_params (Dict[str, Any]): Sampling parameters for the chat completion.
+            routing_key (str, optional): sticky-session key.
 
         Returns:
             TokenOutput: token output
         """
-        server = self._choose_server(request_id)
+        server = self._choose_server(routing_key or request_id)
         output = await server.generate.remote(
             request_id=request_id,
             prompt_ids=prompt_ids,
@@ -113,6 +115,21 @@ class AsyncLLMServerManager:
             image_data=image_data,
         )
         return output
+
+    async def score(
+        self,
+        request_id,
+        *,
+        prompt_ids: list[int],
+        logprob_start_len: int,
+        image_data: Optional[list[Any]] = None,
+        routing_key: Optional[str] = None,
+    ) -> list[tuple[Optional[float], int]]:
+        """Prefill input log-probs."""
+        server = self._choose_server(routing_key or request_id)
+        return await server.score.remote(
+            request_id=request_id, prompt_ids=prompt_ids, image_data=image_data, logprob_start_len=logprob_start_len
+        )
 
 
 class AgentLoopMetrics(BaseModel):

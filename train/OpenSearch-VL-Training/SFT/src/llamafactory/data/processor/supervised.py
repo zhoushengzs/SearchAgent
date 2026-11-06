@@ -57,10 +57,6 @@ class SupervisedDatasetProcessor(DatasetProcessor):
         videos: list["VideoInput"],
         audios: list["AudioInput"],
     ) -> tuple[list[int], list[int]]:
-        # OPENSEARCH_IMAGE_ALIGNMENT_V1
-        if images and self.template.mm_plugin.__class__.__name__ == "Qwen3VLPlugin":
-            from .image_alignment import encode_image_example
-            return encode_image_example(self, prompt, response, system, tools, images, videos, audios)
         messages = self.template.mm_plugin.process_messages(prompt + response, images, videos, audios, self.processor)
         input_ids, labels = self.template.mm_plugin.process_token_ids(
             [], [], images, videos, audios, self.tokenizer, self.processor
@@ -117,20 +113,19 @@ class SupervisedDatasetProcessor(DatasetProcessor):
                 )
                 continue
 
-            aligned_images = list(examples["_images"][i] or [])
             input_ids, labels = self._encode_data_example(
                 prompt=examples["_prompt"][i],
                 response=examples["_response"][i],
                 system=examples["_system"][i],
                 tools=examples["_tools"][i],
-                images=aligned_images,
+                images=examples["_images"][i] or [],
                 videos=examples["_videos"][i] or [],
                 audios=examples["_audios"][i] or [],
             )
             model_inputs["input_ids"].append(input_ids)
             model_inputs["attention_mask"].append([1] * len(input_ids))
             model_inputs["labels"].append(labels)
-            model_inputs["images"].append(aligned_images or None)
+            model_inputs["images"].append(examples["_images"][i])
             model_inputs["videos"].append(examples["_videos"][i])
             model_inputs["audios"].append(examples["_audios"][i])
 
@@ -161,13 +156,12 @@ class PackedSupervisedDatasetProcessor(SupervisedDatasetProcessor):
                 )
                 continue
 
-            aligned_images = list(examples["_images"][i] or [])
             input_ids, labels = self._encode_data_example(
                 prompt=examples["_prompt"][i],
                 response=examples["_response"][i],
                 system=examples["_system"][i],
                 tools=examples["_tools"][i],
-                images=aligned_images,
+                images=examples["_images"][i] or [],
                 videos=examples["_videos"][i] or [],
                 audios=examples["_audios"][i] or [],
             )
@@ -179,7 +173,7 @@ class PackedSupervisedDatasetProcessor(SupervisedDatasetProcessor):
                 length2indexes[length].append(valid_num)
                 batch_input_ids.append(input_ids)
                 batch_labels.append(labels)
-                batch_images.append(aligned_images)
+                batch_images.append(examples["_images"][i] or [])
                 batch_videos.append(examples["_videos"][i] or [])
                 batch_audios.append(examples["_audios"][i] or [])
                 valid_num += 1

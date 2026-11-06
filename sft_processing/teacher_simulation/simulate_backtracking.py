@@ -276,7 +276,7 @@ def run(cfg,args,client_override=None):
     write(out/'summary.json',summary); print(json.dumps(summary,ensure_ascii=False,indent=2)); return out
 
 def doctor(cfg):
-    api=load_api(cfg); c=api.cleaner(cfg); jobs=[j for _,j in lines(cfg['jobs_file'])]; total=0
+    api=load_api(cfg); api.cleaner(cfg); jobs=[j for _,j in lines(cfg['jobs_file'])]; total=0
     for j in jobs:
         if j.get('job_id')!=api.digest({k:v for k,v in j.items() if k not in ('job_id','image_hashes')}): raise Invalid('Job content changed')
         total+=len(api.preflight_images({'base_row':j['source_row']},cfg,False)); teacher_context(j,cfg)

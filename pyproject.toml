@@ -1,0 +1,27 @@
+[tool.ruff]
+target-version = "py310"
+extend-exclude = ["train", "evaluation/vendor", ".ipynb_checkpoints"]
+
+[tool.ruff.lint]
+select = ["F401", "F811", "F821", "F822", "F823", "F841"]
+
+[tool.vulture]
+paths = [
+    "agent", "core", "labeling", "sources", "evaluation", "datasets/grpo",
+    "sft_processing", "cluster", "scripts", "main.py", "agent_pipeline.py",
+    "export_training.py", "prepare_hf_data.py", "partition_trajectory_data.py",
+    "stats.py", "verify.py",
+]
+exclude = ["*/test_*.py", "*/vendor/*"]
+min_confidence = 60
+# Protocol hooks and configured entry points; see README.md.
+ignore_names = [
+    "handle_starttag", "handle_endtag", "handle_data", "readable", "seekable",
+    "row_factory", "_content", "allow_tf32", "dont_write_bytecode",
+    "_REGISTRY_DIR", "_REGISTRY_FILE", "_DATASET_DIR",
+    "accepts_recoil_progress", "termination_reason", "model_output",
+    "is_multithread_safe", "ProcessFileCacheManager",
+    "temporary_directory", "end_point", "api_name",
+    "load_mmsearch_plus", "load_mmbrowsecomp", "load_browsecomp_v3",
+    "load_dynvqa", "load_m3vqa", "load_tirbench",
+]

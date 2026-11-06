@@ -1,4 +1,4 @@
-"""One fixed reference judge and shared verdict cache for all four new conditions."""
+"""Score four evaluation conditions with a fixed judge and shared verdict cache."""
 import argparse
 import json
 import os

@@ -259,8 +259,10 @@ def main(argv=None):
         if not (output/'renumbering_manifest.json').is_file(): p.error('missing generated output marker')
     if output in audit.parents or audit in output.parents or output==audit: p.error('data and audit directories must be separate')
     output.mkdir(parents=True,exist_ok=args.replace_generated_output); audit.mkdir(parents=True,exist_ok=args.replace_generated_output); (output/'review_renumbering').mkdir(exist_ok=args.replace_generated_output); (output/'configs').mkdir(exist_ok=args.replace_generated_output)
-    stage1=json.loads((args.stage1_audit/'summary.json').read_text()); aliases=load_aliases(args.stage1_audit/'trajectory_plans.jsonl')
-    summaries={}; sources={}; all_ids=set(); step_meanings={}; modified_examples=[]; review_reasons=C.Counter(); row_count=0
+    # Validate the stage-one manifest before applying its aliases.
+    json.loads((args.stage1_audit/'summary.json').read_text())
+    aliases=load_aliases(args.stage1_audit/'trajectory_plans.jsonl')
+    summaries={}; sources={}; all_ids=set(); step_meanings={}; modified_examples=[]; review_reasons=C.Counter()
     with (audit/'step_id_mapping.jsonl').open('w') as mf:
         for split in ('train','val'):
             counts=C.Counter(); oldhash=hashlib.sha256(); sh=source/(split+'.jsonl'); before=sh.stat()
@@ -286,7 +288,7 @@ def main(argv=None):
                     except Review as e:
                         review.write(raw); counts['review_rows']+=1; counts['review_final_answer_rows']+=final; review_reasons[e.code]+=1
                         record.update(route='review',reason=e.code,details=e.details)
-                    mf.write(json.dumps(record,ensure_ascii=False)+'\n'); row_count+=1
+                    mf.write(json.dumps(record,ensure_ascii=False)+'\n')
             after=sh.stat(); assert (before.st_size,before.st_mtime_ns)==(after.st_size,after.st_mtime_ns)
             checksum=oldhash.hexdigest(); assert hash_file(sh)==checksum
             assert counts['input_rows']==counts['output_rows']+counts['review_rows']

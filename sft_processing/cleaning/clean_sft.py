@@ -13,7 +13,6 @@ import json
 import re
 import shutil
 import sqlite3
-import sys
 import tempfile
 import time
 from pathlib import Path
@@ -186,7 +185,6 @@ def make_plan(row, max_extra_retries=1):
     retained_retries = []
     step_entries = []
     run_anchor = None
-    by_step = {a['step']: a for a in hist}
     for idx, current in enumerate(hist):
         previous = hist[idx-1] if idx else None
         contiguous = previous is not None and current['step'] == previous['step']+1 and current['key'] == previous['key']

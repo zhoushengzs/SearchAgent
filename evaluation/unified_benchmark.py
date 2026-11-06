@@ -1,8 +1,7 @@
-"""Fresh, frozen four-condition 778-task comparison; historical runs are read-only."""
+"""Compare four evaluation conditions on a frozen 778-task bundle."""
 import argparse
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
@@ -13,7 +12,6 @@ from evaluation.common import write_json_atomic
 from evaluation.grpo_native import runtime_identity
 from evaluation.merge import merge_shards
 from evaluation.native_benchmark import run_workers
-from evaluation.prepare import digest
 from evaluation.remote import output_lock
 from evaluation.run import fingerprint
 from evaluation.unified_common import ASSETS, CONDITIONS, LABELS, asset_identity, weight_identity

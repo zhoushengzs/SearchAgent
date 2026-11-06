@@ -1,4 +1,3 @@
-import copy
 import json
 from pathlib import Path
 import shutil
@@ -408,10 +407,12 @@ class ResumeAndFreshExecutionTests(unittest.TestCase):
                 command = ['run', '--model', str(model), '--tasks', str(root / 'tasks.jsonl'),
                            '--expected-count', '17', '--num-shards', '8', '--shard-index', str(rank),
                            '--mode', 'direct', '--device', 'cuda', '--output', str(root / 'shards' / f'{rank:03d}')]
-                with patch.object(sys, 'argv', command), patch('evaluation.run.LocalModel', FixtureModel):
+                with patch.object(sys, 'argv', command), patch('evaluation.run.LocalModel', FixtureModel), \
+                     patch('importlib.metadata.version', return_value='fixture'):
                     main()
             self.assertEqual(merge_shards(root / 'shards', root / 'merged', root / 'tasks.jsonl'), 17)
-            with patch.object(sys, 'argv', command), patch('evaluation.run.LocalModel') as model_constructor:
+            with patch.object(sys, 'argv', command), patch('evaluation.run.LocalModel') as model_constructor, \
+                 patch('importlib.metadata.version', return_value='fixture'):
                 main()
                 model_constructor.assert_not_called()
 

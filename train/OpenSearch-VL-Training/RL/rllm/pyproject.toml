@@ -9,7 +9,7 @@ description = "Reinforcement Learning for Language Agents"
 authors = [
     {name = "rLLM Team"}
 ]
-readme = "README.md"
+readme = {text = "rLLM: reinforcement learning for language agents. Upstream: https://github.com/rllm-org/rllm", content-type = "text/markdown"}
 requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",

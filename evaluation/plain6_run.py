@@ -1,7 +1,6 @@
-"""Run the added Base condition with the saved ordinary prompt and native six tools.
+"""Evaluate the Base model with the ordinary prompt and six native tools.
 
-The four already-running conditions and their source hashes stay untouched.
-Only the system prompt is replaced inside this worker process.
+The prompt override is scoped to the worker process.
 """
 from contextlib import contextmanager, ExitStack
 import json
@@ -19,8 +18,7 @@ def extension_identity():
 
 
 def ordinary_system(session):
-    # Keep the previous ordinary instructions verbatim and supply exactly the
-    # same schemas as the native conditions. No legacy answer-recovery loop.
+    # Combine the ordinary instructions with the native tool schemas.
     schemas = session.get_all_tools().values()
     return SYSTEM + '\n\n# Tools\n<tools>\n' + '\n'.join(
         json.dumps(schema, ensure_ascii=False) for schema in schemas) + '\n</tools>'

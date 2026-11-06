@@ -35,6 +35,7 @@ from verl.utils.debug import marked_timer
 
 from rllm.engine.agent_workflow_engine import AgentWorkflowEngine
 from rllm.engine.rollout.verl_engine import VerlEngine
+from rllm.trainer.recoil_advantage import RecoilTrainerConfig, compose_recoil_advantages
 from rllm.utils.episode_logger import EpisodeLogger
 from rllm.workflows.workflow import TerminationReason
 
@@ -223,6 +224,9 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                 )
 
                 _empty_batch = False
+                self.agent_execution_engine.recoil_progress = min(
+                    1.0, self.global_steps / max(1, self.total_training_steps)
+                )
                 with marked_timer("step", timing_raw):
                     # generate trajectories
                     final_gen_batch_output = self.generate_trajectories(
@@ -238,6 +242,13 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                     final_gen_batch_output.meta_info.pop(
                         "repeat_counts", None
                     )  # no longer needed after this
+                    # Generated rows carry their own image inputs, including branch images.
+                    # Original question image inputs must not overwrite those row-aligned inputs.
+                    if "multi_modal_inputs" in new_batch.non_tensor_batch:
+                        if "multi_modal_inputs" not in final_gen_batch_output.non_tensor_batch:
+                            raise RuntimeError("Generated learning rows lost image inputs")
+                        assert len(final_gen_batch_output.non_tensor_batch["multi_modal_inputs"]) == len(final_gen_batch_output)
+                        new_batch.non_tensor_batch.pop("multi_modal_inputs")
                     new_batch = new_batch.union(final_gen_batch_output)
 
                     # rejection sampling
@@ -496,12 +507,31 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                             config=self.config.algorithm,
                         )
 
-                        # One-sided advantage clamp for fatal trajectories.
-                        # Fatal trajectories participate in group statistics
-                        # (above), but their prefix tokens should only receive
-                        # positive gradient.  Clamping A >= 0 ensures worst
-                        # case degenerates to hard mask (zero gradient).
-                        if "is_fatal" in batch.non_tensor_batch:
+                        recoil_cfg = RecoilTrainerConfig.from_env()
+                        if (
+                            recoil_cfg.enable
+                            and "recoil_meta" in batch.non_tensor_batch
+                            and "recoil_turn_ids" in batch.batch.keys()
+                        ):
+                            # Per-turn credit; rows without metadata keep the original fatal clamp.
+                            composed, recoil_metrics = compose_recoil_advantages(
+                                advantages=batch.batch["advantages"],
+                                response_mask=batch.batch["response_mask"],
+                                turn_ids=batch.batch["recoil_turn_ids"],
+                                metas=list(batch.non_tensor_batch["recoil_meta"]),
+                                group_ids=list(batch.non_tensor_batch["task_ids"]),
+                                cfg=recoil_cfg,
+                                is_fatal=batch.non_tensor_batch.get("is_fatal"),
+                            )
+                            batch.batch["advantages"] = composed
+                            batch.batch["returns"] = composed.clone()
+                            metrics.update(recoil_metrics)
+                        elif "is_fatal" in batch.non_tensor_batch:
+                            # One-sided advantage clamp for fatal trajectories.
+                            # Fatal trajectories participate in group statistics
+                            # (above), but their prefix tokens should only receive
+                            # positive gradient.  Clamping A >= 0 ensures worst
+                            # case degenerates to hard mask (zero gradient).
                             _fatal_mask = batch.non_tensor_batch["is_fatal"]
                             if hasattr(_fatal_mask, "astype"):
                                 _fatal_mask = _fatal_mask.astype(bool)
@@ -713,6 +743,11 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
             test_output_gen_batch.meta_info.pop(
                 "repeat_counts", None
             )  # no longer needed after this
+            if "multi_modal_inputs" in test_batch.non_tensor_batch:
+                if "multi_modal_inputs" not in test_output_gen_batch.non_tensor_batch:
+                    raise RuntimeError("Generated validation rows lost image inputs")
+                assert len(test_output_gen_batch.non_tensor_batch["multi_modal_inputs"]) == len(test_output_gen_batch)
+                test_batch.non_tensor_batch.pop("multi_modal_inputs")
             test_batch = test_batch.union(test_output_gen_batch)
 
             seen_episodes = set()

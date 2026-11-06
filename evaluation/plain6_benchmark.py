@@ -1,9 +1,8 @@
-"""Add one prompt-only control without changing the running four-condition job."""
+"""Evaluate five conditions, including an ordinary-prompt tool control."""
 import argparse
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 import time
 

@@ -1,5 +1,5 @@
 """Read-only verification of every prepared task against its source."""
-import collections, hashlib, json
+import collections, json
 from pathlib import Path
 import teacher_stage2 as s
 

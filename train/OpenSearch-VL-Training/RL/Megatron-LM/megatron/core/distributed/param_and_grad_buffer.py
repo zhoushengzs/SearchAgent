@@ -556,8 +556,8 @@ class _ParamAndGradBuffer:
             if self.ddp_config.use_distributed_optimizer:
                 # Workaround for TE bug causing cuBLAS to pick an incompatible algorithm.
                 # This also helps cuBLAS pick more efficient algorithms for GEMMs.
-                # We now ensure that all buckets start at a memory address that is 256-byte
-                # aligned (128 values since params and grads use >= 16-bit precision).
+                # Align bucket starts to 256-byte boundaries (128 values for
+                # parameters and gradients with at least 16-bit precision).
                 if self.ddp_config.pad_buckets_for_high_nccl_busbw:
                     # Make sure the bucket size is divisible by a large power of 2 (2^16) to
                     # ensure NCCL collectives have high bus bandwidth at large DP counts,

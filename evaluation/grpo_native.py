@@ -1,4 +1,4 @@
-"""Evaluate a checkpoint by calling the real GRPO agent, not the legacy agent loop."""
+"""Evaluate a checkpoint with the GRPO agent and tool environment."""
 from __future__ import annotations
 
 import argparse
@@ -9,10 +9,8 @@ import importlib
 import importlib.metadata
 import io
 import json
-import os
 from pathlib import Path
 import sys
-import time
 from types import SimpleNamespace
 
 from PIL import Image

@@ -1,4 +1,4 @@
-"""Frozen non-weight settings shared by the four new evaluation conditions."""
+"""Shared non-weight settings for four evaluation conditions."""
 from pathlib import Path
 import json
 import struct

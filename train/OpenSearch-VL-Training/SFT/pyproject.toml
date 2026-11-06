@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "llamafactory"
 dynamic = ["version"]
 description = "Unified Efficient Fine-Tuning of 100+ LLMs"
-readme = "README.md"
+readme = {text = "LLaMA-Factory: unified efficient fine-tuning of language models. Upstream: https://github.com/hiyouga/LLaMA-Factory", content-type = "text/markdown"}
 license = "Apache-2.0"
 requires-python = ">=3.11.0"
 authors = [

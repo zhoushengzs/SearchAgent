@@ -71,7 +71,7 @@ class RolloutCorrectionConfig(BaseConfig):
     "When Speed Kills Stability: Demystifying RL Collapse from the Inference-Training Mismatch"
     https://yingru.notion.site/When-Speed-Kills-Stability-271211a558b7808d8b12d403fd15edda
 
-    This typed config replaces the old dict-based approach and provides:
+    The typed configuration provides:
     - Type safety and validation
     - Clear documentation of all parameters
     - Named factory methods for common presets (TIS, MIS, etc.)

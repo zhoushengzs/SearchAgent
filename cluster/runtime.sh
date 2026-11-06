@@ -42,5 +42,5 @@ export LIBRARY_PATH="$TRITON_LIBCUDA_PATH:$CUDA_HOME/targets/x86_64-linux/lib${L
 export TRITON_CACHE_MANAGER=process_triton_cache:ProcessFileCacheManager
 export TORCHINDUCTOR_COMPILE_THREADS=1
 
-# Establish a correct full-model run before enabling optional graph compilation.
+# Disable graph compilation for this runtime.
 export TORCH_COMPILE_DISABLE=1

@@ -54,9 +54,6 @@ class Instruction:
     def sha_for(self, source: str) -> str:
         return _sha(self.text_for(source)) if source in self.addenda else self.sha
 
-    def addendum_name(self, source: str) -> str | None:
-        return f"{source}.txt" if source in self.addenda else None
-
 
 def build_prompt(sample: dict[str, Any],
                  instruction: Instruction | None = None) -> str:

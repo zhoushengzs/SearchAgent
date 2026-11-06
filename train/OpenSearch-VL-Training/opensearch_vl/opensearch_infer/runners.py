@@ -289,10 +289,8 @@ class MiniMaxRunner(BaseRunner):
 def _patch_moe_scatter_dtype() -> None:
     """Realign router weights to the input dtype for Qwen3-VL MoE.
 
-    Older Transformers releases scatter the router weights with the
-    softmax dtype which does not match ``hidden_states`` when the model
-    runs in bfloat16 / float16. This patch mirrors the upstream fix so
-    the 30B-A3B checkpoint can be served immediately.
+    Cast router weights to ``hidden_states.dtype`` before scatter operations
+    during bfloat16 or float16 inference.
     """
 
     try:

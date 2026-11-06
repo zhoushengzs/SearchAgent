@@ -14,7 +14,6 @@
 
 # setup.py is the fallback installation script when pyproject.toml does not work
 import os
-from pathlib import Path
 
 from setuptools import find_packages, setup
 
@@ -73,8 +72,7 @@ extras_require = {
 }
 
 
-this_directory = Path(__file__).parent
-long_description = (this_directory / "README.md").read_text()
+long_description = "verl: Volcano Engine Reinforcement Learning for LLM. Upstream: https://github.com/volcengine/verl"
 
 setup(
     name="verl",

@@ -1,6 +1,5 @@
 import argparse
 import base64
-import copy
 import io
 import json
 import tempfile
@@ -10,12 +9,11 @@ from pathlib import Path
 import simulate_backtracking as s
 
 ROOT=Path(__file__).resolve().parents[2]
-SOURCE=Path('/Users/ss/Downloads/OpenSearch-VL-SFT-Agent-NoImages')
 PNG=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6kS8AAAAASUVORK5CYII=')
 
 def make_fixture(p):
     cfg={'existing_teacher_script':str(ROOT/'sft_processing/teacher/teacher_stage2.py'),
-        'cleaner_script':str(SOURCE/'.codex/sft_cleaning_20261025/clean_sft.py'),'media_dir':str(p),'max_simulated_actions':8,
+        'cleaner_script':str(ROOT/'sft_processing/cleaning/clean_sft.py'),'media_dir':str(p),'max_simulated_actions':8,
         'max_context_characters':200000,'max_output_tokens':4000,'runs_dir':str(p/'runs'),'jobs_file':str(p/'jobs.jsonl'),'prompts_dir':str(p/'prompts')}
     (p/'prompts').mkdir(); (p/'prompts'/'teacher.txt').write_text('TEACHER'); (p/'prompts'/'reviewer.txt').write_text('REVIEWER')
     for name in ('initial.png','detail.png'): (p/name).write_bytes(PNG)

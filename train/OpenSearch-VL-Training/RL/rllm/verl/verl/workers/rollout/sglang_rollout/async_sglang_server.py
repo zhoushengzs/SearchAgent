@@ -238,6 +238,9 @@ class SGLangHttpServer:
         """Generate sequence with token-in-token-out."""
         # TODO(@wuxibin): switch to `/generate` http endpoint once multi-modal support ready.
         max_new_tokens = min(self.config.response_length, self.config.max_model_len - len(prompt_ids) - 1)
+        requested = sampling_params.pop("max_new_tokens", None)  # per-call cap can only lower it
+        if requested is not None:
+            max_new_tokens = min(max_new_tokens, int(requested))
         sampling_params["max_new_tokens"] = max_new_tokens
         return_logprob = sampling_params.pop("logprobs", False)
 
@@ -258,6 +261,41 @@ class SGLangHttpServer:
             token_ids = output["output_ids"]
             log_probs = None
         return TokenOutput(token_ids=token_ids, log_probs=log_probs)
+
+    async def score(
+        self,
+        prompt_ids: list[int],
+        request_id: str,
+        logprob_start_len: int,
+        image_data: Optional[list[Any]] = None,
+    ) -> list[tuple[float, int]]:
+        """Teacher-force target tokens without indexing expanded image tokens."""
+        import math
+        split = logprob_start_len + 1
+        if not 0 < split < len(prompt_ids):
+            raise ValueError("RECOIL score requires a nonempty prefix and target")
+        import asyncio, time
+        started = time.monotonic()
+        async def score_position(position):
+            target = int(prompt_ids[position])
+            request = GenerateReqInput(
+                rid=f"{request_id}-target-{position-split}",
+                input_ids=prompt_ids[:position],
+                sampling_params={"max_new_tokens": 1, "temperature": 0.0},
+                return_logprob=True, logprob_start_len=-1,
+                token_ids_logprob=[target], image_data=image_data,
+            )
+            output = await self.tokenizer_manager.generate_request(request, None).__anext__()
+            rows = output["meta_info"].get("output_token_ids_logprobs") or []
+            matches = [entry for entry in (rows[0] if rows else []) if int(entry[1]) == target]
+            if len(matches) != 1 or matches[0][0] is None or not math.isfinite(float(matches[0][0])):
+                raise RuntimeError("RECOIL target probability missing, mismatched, or nonfinite")
+            return (float(matches[0][0]), target)
+        entries = []
+        for start in range(split, len(prompt_ids), 4):
+            entries.extend(await asyncio.gather(*(score_position(pos) for pos in range(start, min(start + 4, len(prompt_ids))))))
+        print(f"RECOIL_SCORE_TIMING tokens={len(entries)} seconds={time.monotonic()-started:.6f} parallel=4", flush=True)
+        return entries
 
 
 _rollout_worker_actor_cls = ray.remote(ServerAdapter)

@@ -11,7 +11,7 @@ import sys
 import time
 
 from evaluation import server_benchmark as base
-from evaluation.common import load_tasks, read_predictions, write_json_atomic
+from evaluation.common import write_json_atomic
 from evaluation.grpo_native import runtime_identity
 from evaluation.merge import merge_shards
 from evaluation.prepare import digest

@@ -104,6 +104,10 @@ class AgentWorkflowEngine:
         # Stores the raw Episode list from the most recent execute_tasks call
         self._last_episodes: list[Episode] = []
 
+        # Training progress in [0, 1]; forwarded to workflows that declare
+        # ``accepts_recoil_progress`` (RECOIL error-state curriculum).
+        self.recoil_progress = 0.0
+
     def set_training_step(self, step: int, mode: str = "train", epoch: int = 0):
         """Set current training step for episode logging.
 
@@ -155,6 +159,8 @@ class AgentWorkflowEngine:
             Exception: If task fails permanently after retry_limit attempts and raise_on_error is True.
         """
         workflow = await self.workflow_queue.get()
+        if getattr(self.workflow_cls, "accepts_recoil_progress", False):
+            kwargs = {**kwargs, "recoil_progress": self.recoil_progress}
         try:
             for retry_attempt in range(1, self.retry_limit + 1):
                 uid = f"{task_id}:{rollout_idx}"
@@ -341,6 +347,10 @@ class AgentWorkflowEngine:
         multi_modal_inputs_list = []
         is_fatal_flags = []
         fatal_step_indices = []
+        turn_id_rows = []  # per-row assistant-turn index of every response token (RECOIL)
+        recoil_metas = []
+        recoil_valid = []
+        image_cache = {}  # main and branch rows share their prefix images
 
         for i, episode in enumerate(episodes):
             total_steps = 0
@@ -370,6 +380,30 @@ class AgentWorkflowEngine:
 
                 if len(trajectory.steps) == 0:
                     logger.info(f"Trajectory {trajectory_id} has no steps, skipping")
+                    continue
+
+                recoil = trajectory.info.get("recoil") if isinstance(trajectory.info, dict) else None
+                if recoil is not None and not self.config.rllm.stepwise_advantage.enable:
+                    built = self._build_recoil_row(trajectory, recoil, episode, image_cache)
+                    if built is None:
+                        continue
+                    prompts.append(built["prompt"])
+                    responses.append(built["response"])
+                    traj_mask.append(built["mask"])
+                    multi_modal_inputs_list.append(built["multi_modal_inputs"])
+                    turn_id_rows.append(built["turn_ids"])
+                    recoil_metas.append(recoil)
+                    recoil_valid.append(built["valid"])
+                    step_rewards.append(trajectory.reward)
+                    step_ids.append(trajectory_id)
+                    trajectory_ids.append(trajectory_id)
+                    step_nums.append(1)
+                    traj_rewards.append(trajectory.reward)
+                    is_last_step.append(True)
+                    is_fatal_flags.append(bool(recoil.get("is_fatal")))
+                    mask_from = recoil.get("mask_from")
+                    fatal_step_indices.append(mask_from if mask_from is not None else -1)
+                    total_steps += 1
                     continue
 
                 if not self.config.rllm.stepwise_advantage.enable:
@@ -489,6 +523,9 @@ class AgentWorkflowEngine:
                     [ep_fatal_step_idx if ep_fatal_step_idx is not None else -1]
                     * n_steps
                 )
+                turn_id_rows.extend([None] * n_steps)
+                recoil_metas.extend([None] * n_steps)
+                recoil_valid.extend([None] * n_steps)
                 total_steps += n_steps
 
             episode_ids.extend([episode.id] * total_steps)
@@ -573,6 +610,17 @@ class AgentWorkflowEngine:
         )
         traj_mask = traj_mask[:, :max_response_length]  # truncate if necessary
 
+        turn_id_batch = torch.nn.utils.rnn.pad_sequence(
+            [
+                row if row is not None else torch.full((len(responses[k]),), -1, dtype=torch.long)
+                for k, row in enumerate(turn_id_rows)
+            ],
+            batch_first=True,
+            padding_value=-1,
+        )
+        turn_id_batch = pad_sequence_to_length(turn_id_batch, max_response_length, -1, left_pad=False)
+        turn_id_batch = turn_id_batch[:, :max_response_length]
+
         # Place all rewards to last response token of the last_step response
         traj_rewards_batch = torch.zeros_like(response_batch, dtype=torch.float32)
         step_rewards_batch = torch.zeros_like(response_batch, dtype=torch.float32)
@@ -636,6 +684,10 @@ class AgentWorkflowEngine:
             ):
                 is_valid[i] = True
 
+        for i in range(len(is_valid)):
+            if i < len(recoil_valid) and recoil_valid[i] is not None:
+                is_valid[i] = bool(recoil_valid[i])
+
         non_tensors = {
             "episode_ids": np.array(episode_ids),  # unique identifier for each rollout
             "trajectory_ids": np.array(
@@ -655,6 +707,7 @@ class AgentWorkflowEngine:
             "is_last_step": np.array(is_last_step),
             "is_pad_step": np.array([False] * len(episode_ids)),
             "is_fatal": np.array(is_fatal_flags) if is_fatal_flags else np.array([False] * len(episode_ids)),
+            "recoil_meta": np.array(recoil_metas + [None] * (len(episode_ids) - len(recoil_metas)), dtype=object),
         }
 
         if any(mm_inputs is not None for mm_inputs in multi_modal_inputs_list):
@@ -672,12 +725,65 @@ class AgentWorkflowEngine:
                 "response_mask": traj_mask,
                 "traj_rewards": traj_rewards_batch,
                 "step_rewards": step_rewards_batch,
+                "recoil_turn_ids": turn_id_batch,
             },
             non_tensors=non_tensors,
             meta_info={
                 "repeat_counts": repeat_counts,
             },
         )
+
+    def _build_recoil_row(self, trajectory, recoil: dict, episode: Episode, image_cache: dict) -> dict | None:
+        """Masked multimodal training row."""
+        from rllm.parser.mm_cumulative import PromptTooLong, tokenize_cumulative_mm
+
+        messages = trajectory.steps[-1].chat_completions
+        try:
+            tokens = tokenize_cumulative_mm(
+                self.rollout_engine.chat_parser,
+                messages,
+                max_prompt_length=self.config.data.max_prompt_length,
+                max_response_length=self.config.data.max_response_length,
+                cache=image_cache,
+            )
+            if tokens.response_ids.numel() == 0:
+                raise PromptTooLong("no response tokens fit the response budget")
+        except Exception as exc:  # noqa: BLE001
+            reason = "too long" if isinstance(exc, PromptTooLong) else f"{type(exc).__name__}: {exc}"
+            logger.warning(f"[RECOIL] cannot tokenize {trajectory.name} of {episode.id} ({reason})")
+            if recoil.get("kind") != "main":
+                return None
+            filler = torch.tensor([self.rollout_engine.tokenizer.eos_token_id or 0], dtype=torch.long)
+            return {
+                "prompt": filler,
+                "response": filler.clone(),
+                "mask": torch.zeros(1, dtype=torch.long),
+                "turn_ids": torch.full((1,), -1, dtype=torch.long),
+                "multi_modal_inputs": {},
+                "valid": False,
+            }
+        turn_ids = tokens.turn_ids
+        mask = tokens.response_mask.clone()
+        trainable_from = int(recoil.get("trainable_from") or 0)
+        mask[turn_ids < trainable_from] = 0
+        mask_from = recoil.get("mask_from")
+        if mask_from is not None:
+            mask[turn_ids >= int(mask_from)] = 0
+        if tokens.num_turns != len(trajectory.steps) and not tokens.dropped_messages:
+            logger.warning(
+                f"[RECOIL] turn count mismatch for {trajectory.name}: {tokens.num_turns} vs {len(trajectory.steps)}"
+            )
+        valid = bool(mask.sum().item() > 0) and episode.termination_reason != TerminationReason.ERROR
+        if not valid and recoil.get("kind") != "main":
+            return None
+        return {
+            "prompt": tokens.prompt_ids,
+            "response": tokens.response_ids,
+            "mask": mask,
+            "turn_ids": turn_ids,
+            "multi_modal_inputs": tokens.multi_modal_inputs,
+            "valid": valid,
+        }
 
     def _handle_multimodal_position_ids(
         self,

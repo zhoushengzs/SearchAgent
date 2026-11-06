@@ -1,4 +1,4 @@
-import copy, json, unittest
+import json, unittest
 from test_teacher_stage2 import Stage2Tests as _Fixtures, configured_row, candidate, row
 import teacher_stage2 as s
 

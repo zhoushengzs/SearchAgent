@@ -9,9 +9,8 @@ from io import BytesIO
 import json
 import os
 from pathlib import Path
-import re
 import sys
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 
 import requests
 import jsonschema

@@ -12,11 +12,11 @@ include = ["megatron.core", "megatron.core.*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "megatron.core.package_info.__version__" }
-readme = { file = "README.md", content-type = "text/markdown" }
 
 [project]
 name = "megatron-core"
-dynamic = ["version", "readme"]
+dynamic = ["version"]
+readme = {text = "Megatron Core: efficient and scalable transformer training. Upstream: https://github.com/NVIDIA/Megatron-LM", content-type = "text/markdown"}
 description = "Megatron Core - a library for efficient and scalable training of transformer based models"
 requires-python = ">=3.10"
 license = { text = "Apache 2.0" }

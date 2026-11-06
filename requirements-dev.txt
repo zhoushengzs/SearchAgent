@@ -1,0 +1,7 @@
+# Offline code checks and fixtures; install in a separate development environment.
+ruff>=0.9
+vulture>=2.14
+python-dotenv>=1.0
+numpy>=1.24
+Pillow>=9.1.0
+requests>=2.32.2

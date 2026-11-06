@@ -94,6 +94,7 @@ class EpisodeLogger:
                 "reward": traj.reward,
                 "num_steps": len(traj.steps),
                 "timing": traj.info.get("timing", {}),
+                "info": {k: v for k, v in traj.info.items() if k != "timing"},
                 "steps": [
                     {
                         "observation": step.observation,

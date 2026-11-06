@@ -356,7 +356,7 @@ def _should_mask_episode(result: dict, episode: Episode) -> tuple[bool, str]:
 
 
 # ---------------------------------------------------------------------------
-# Step-level fatal-after detection (replaces trajectory-level hard mask)
+# Consecutive-error attribution
 # ---------------------------------------------------------------------------
 
 _CONSECUTIVE_ERROR_THRESHOLD = 3
@@ -510,11 +510,8 @@ class DeepResearchWorkflow(Workflow):
                         )
 
             # --- Step-level fatal-after detection ---
-            # Replaces the old trajectory-level hard mask.  Instead of
-            # discarding entire anomalous episodes, we detect the first
-            # "fatal" point (consecutive-error cascade) and only mask
-            # tokens *after* that point.  The prefix is kept for learning
-            # with a one-sided advantage clamp (see trainer).
+            # Mask tokens after the first consecutive-error cascade.
+            # Keep prefix tokens with a one-sided advantage clamp.
             first_traj = (
                 episode.trajectories[0] if episode.trajectories else None
             )

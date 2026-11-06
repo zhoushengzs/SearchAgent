@@ -48,9 +48,8 @@ class PartialSingleTurnAgentLoop(AgentLoopBase):
         param_version_end = param_version
 
         if not output:
-            # TODO(baiyan): it is supposed to use the correct processor,
-            #    but I found the async training would hang if use_correct_processor=True.
-            #    so we use the tokenizer to tokenize the prompt for now.
+            # Tokenizer-based prompt encoding avoids a processor-related hang
+            # during asynchronous training.
             use_correct_processor = False
             if self.processor is not None and use_correct_processor:
 

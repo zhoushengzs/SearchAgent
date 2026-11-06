@@ -15,7 +15,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from evaluation.prepare import digest, dump, rows
+from evaluation.prepare import digest
 from evaluation.common import load_tasks, materialize_task_paths, read_predictions, shard_tasks, write_json_atomic
 from evaluation.protocol import (normalize_call, observation_message, state_message,
                                  training_system, training_tools)
